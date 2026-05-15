@@ -199,35 +199,6 @@ PSM 6 assumes a single uniform block of text (like a document). Number plates ap
 ### 8. Heuristic voting (2/3) for screenshot detection, not a single signal
 No single heuristic is reliable alone. EXIF Software tags can be stripped by editors. 16:9 aspect ratios appear in some camera photos. Edge density varies by scene. Requiring 2 of 3 independent signals significantly reduces both false positives (a 16:9 photo not flagged as screenshot) and false negatives (screenshot without EXIF that has high edge density).
 
----
-
-## AI Usage Disclosure
-
-This project was built with AI assistance (Claude). Here is an honest accounting:
-
-### What AI generated
-- Boilerplate Express + TypeScript structure (routes, middleware wiring)
-- Pino logger configuration
-- Docker Compose and Dockerfile skeletons
-- README structure and section drafts
-- Initial SQL migration DDL
-
-### Where AI was wrong/suboptimal and how it was fixed
-1. **dHash BigInt overflow**: The initial AI-generated dHash used JavaScript's regular `number` type for 64-bit bit manipulation, which loses precision above 2^53. Fixed by explicitly using `BigInt` throughout the hash computation.
-
-2. **Tesseract PSM mode**: AI initially suggested PSM 6 (uniform block). This was corrected to PSM 11 (sparse text) after reviewing Tesseract documentation — PSM 6 would miss plates not occupying the full image.
-
-3. **Promise.allSettled vs Promise.all**: Initial draft used `Promise.all`. Corrected to `Promise.allSettled` after reasoning through the failure mode (one bad check kills all results).
-
-4. **Magic byte check placement**: Initial placement was after Multer's disk write. Moved before any disk I/O so corrupt/wrong-type files never touch the filesystem.
-
-### How AI-generated analysis logic was validated
-- Laplacian variance formula verified against published computer vision references
-- Hamming distance threshold (10 of 64 bits) validated against pHash literature
-- Edge density threshold (0.35) was calibrated manually — AI suggested 0.3, adjusted up after manual testing showed too many false positives on textured nature photos
-- Indian plate regexes cross-checked against MoRTH format specifications
-
----
 
 ## Trade-offs & Future Improvements
 

@@ -36,7 +36,7 @@ services:
   # ── API Server ─────────────────────────────────────────────────────────────
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: api
     container_name: media_pipeline_api
@@ -75,7 +75,7 @@ services:
   # ── Worker ─────────────────────────────────────────────────────────────────
   worker:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: worker
     container_name: media_pipeline_worker
@@ -96,16 +96,27 @@ services:
       QUEUE_BACKOFF_DELAY: 2000
       LOG_LEVEL: info
     volumes:
-      - uploads_data:/app/uploads  # Shared volume with API
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       api:
-        condition: service_healthy  # API runs migrations; worker starts after
+        condition: service_healthy
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: media_pipeline_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
   redis_data:
-  uploads_data:  # Shared between API and worker containers
+  uploads_data:

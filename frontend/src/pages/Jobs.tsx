@@ -17,8 +17,8 @@ const Jobs: React.FC = () => {
         url += `&status=${statusFilter.toLowerCase()}`;
       }
       const response = await axios.get(url);
-      setJobs(response.data.data);
-      setTotal(response.data.total);
+      setJobs(response.data.jobs || []);
+      setTotal(response.data.total || 0);
     } catch (error) {
       console.error('Failed to fetch jobs', error);
     }

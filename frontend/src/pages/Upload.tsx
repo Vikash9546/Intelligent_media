@@ -52,11 +52,10 @@ const Upload: React.FC = () => {
         },
       });
 
-      if (response.data.data?.jobId) {
-        // Navigate to the job results page after a brief delay
+      if (response.data?.jobId) {
         setTimeout(() => {
-          navigate(`/jobs/${response.data.data.jobId}`);
-        }, 1000);
+          navigate(`/jobs/${response.data.jobId}`);
+        }, 1500);
       }
     } catch (err: any) {
       console.error(err);

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { fileTypeFromBuffer } from 'file-type';
+import { fromBuffer } from 'file-type';
 import sharp from 'sharp';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -112,7 +112,7 @@ export async function uploadHandler(req: Request, res: Response, next: NextFunct
   // ── Step 2: Magic byte validation ────────────────────────────────────────────
   // file-type reads the first bytes of the buffer to determine the actual format.
   // This prevents attacks like a .php file renamed to .jpg.
-  const detectedType = await fileTypeFromBuffer(fileBuffer);
+  const detectedType = await fromBuffer(fileBuffer);
 
   if (!detectedType || !ALLOWED_MIME_TYPES.includes(detectedType.mime as (typeof ALLOWED_MIME_TYPES)[number])) {
     next(new UnsupportedFileTypeError(detectedType?.mime ?? 'unknown'));

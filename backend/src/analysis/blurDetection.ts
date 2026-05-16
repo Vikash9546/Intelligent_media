@@ -33,7 +33,7 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
 
   const width = info.width;
   const height = info.height;
-  const pixels = new Float64Array(data); // widen to float to avoid integer overflow
+  const pixels = new Uint8Array(data); // 8-bit grayscale values
 
   // 2. Apply Laplacian kernel via manual convolution.
   //    We skip the border pixels (1-pixel padding) to avoid edge artifacts.

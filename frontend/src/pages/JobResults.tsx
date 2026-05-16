@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useParams, Link } from 'react-router-dom';
+import { 
+  getBlurInterpretation, 
+  getBrightnessInterpretation 
+} from '../utils/analysisHelpers';
 
 const JobResults: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -36,7 +40,6 @@ const JobResults: React.FC = () => {
     return <div className="p-xl text-center font-headline-md text-error">{error || 'Job not found'}</div>;
   }
 
-  // Helper to determine status color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -46,18 +49,23 @@ const JobResults: React.FC = () => {
     }
   };
 
-  const getQualityText = (score: number) => {
-    if (score > 90) return { text: 'High Fidelity', desc: 'Optimal for production' };
-    if (score > 70) return { text: 'Standard Quality', desc: 'Acceptable for most uses' };
-    return { text: 'Low Quality', desc: 'May require review' };
+  const getQualityTier = (score: number) => {
+    if (score >= 90) return { text: 'Premium Fidelity', desc: 'Optimal production standard' };
+    if (score >= 75) return { text: 'High Quality', desc: 'Reliable for automated processing' };
+    if (score >= 50) return { text: 'Acceptable', desc: 'May contain minor fidelity artifacts' };
+    return { text: 'Low Fidelity', desc: 'Manual review strongly recommended' };
   };
 
   const displayScore = Math.round((job.qualityScore || 0) * 100);
-  const quality = getQualityText(displayScore);
+  const tier = getQualityTier(displayScore);
+
+  // Perceptual interpretations
+  const blurInfo = results?.blur ? getBlurInterpretation(results.blur) : null;
+  const brightnessInfo = results?.brightness ? getBrightnessInterpretation(results.brightness) : null;
 
   return (
     <div className="max-w-[1400px] mx-auto">
-      {/* Job Results Header Section */}
+      {/* Header Section */}
       <section className="mb-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
         <div className="space-y-base">
           <div className="flex items-center gap-sm">
@@ -75,8 +83,8 @@ const JobResults: React.FC = () => {
               <span>{new Date(job.createdAt).toLocaleDateString()}</span>
             </div>
             <div className="flex items-center gap-xs">
-              <span className="material-symbols-outlined text-[18px]">image</span>
-              <span>{job.originalFilename}</span>
+              <span className="material-symbols-outlined text-[18px]">tag</span>
+              <span>ID: {job.id}</span>
             </div>
           </div>
         </div>
@@ -98,70 +106,109 @@ const JobResults: React.FC = () => {
             </div>
           </div>
           <div>
-            <p className="font-label-md text-outline uppercase tracking-wider">Overall Quality</p>
-            <p className="font-headline-md text-primary">{quality.text}</p>
-            <p className="text-body-md text-on-surface-variant">{quality.desc}</p>
+            <p className="font-label-md text-outline uppercase tracking-wider">Quality Score</p>
+            <p className="font-headline-md text-primary">{tier.text}</p>
+            <p className="text-body-md text-on-surface-variant">{tier.desc}</p>
           </div>
         </div>
       </section>
 
-      {/* Result Cards Bento Grid */}
+      {/* Result Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
         
-        {/* Blur Detection Card */}
+        {/* Blur Detection Card (Refined) */}
         <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">blur_on</span>
-              <h3 className="font-headline-md text-headline-md">Blur Detection</h3>
+              <span className={`material-symbols-outlined ${blurInfo?.color || 'text-secondary'}`}>
+                {blurInfo?.icon || 'blur_on'}
+              </span>
+              <h3 className="font-headline-md text-headline-md">Sharpness</h3>
             </div>
-            <span className="text-on-surface-variant font-code-sm">
-              Var: {results?.blur?.variance?.toFixed(1) || 'N/A'}
-            </span>
-          </div>
-          <div className="flex-1 flex flex-col justify-center gap-sm">
-            <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${results?.blur?.isBlurred ? 'bg-error' : 'bg-secondary'}`} 
-                style={{ width: `${Math.min(100, (results?.blur?.variance || 0) / 10)}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between text-label-md text-outline">
-              <span>Sharp</span>
-              <span>Motion Blur</span>
+            <div className="flex flex-col items-end">
+              <span className="font-code-sm text-[10px] text-outline uppercase">Confidence</span>
+              <span className="font-headline-sm text-primary">
+                {Math.round((results?.blur?.confidence || 0) * 100)}%
+              </span>
             </div>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.blur?.isBlurred 
-              ? 'Low variance indicates significant blurring or lack of focus.' 
-              : 'Variance score indicates high edge definition. Low probability of focus issues.'}
-          </p>
+          
+          <div className="flex-1 space-y-md">
+            <div>
+              <p className={`font-headline-sm ${blurInfo?.color || 'text-primary'}`}>
+                {blurInfo?.label || 'Calculating...'}
+              </p>
+              <p className="text-body-md text-on-surface-variant mt-1">
+                {blurInfo?.desc}
+              </p>
+            </div>
+            
+            {/* Diagnostics Accordion-style (expanded by default for now) */}
+            <div className="p-md bg-surface-container-low rounded-lg space-y-xs border border-outline-variant">
+              <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Diagnostics</p>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Edge Energy</span>
+                <span className="text-primary font-code-sm">{results?.blur?.details?.laplacianVariance?.toFixed(1) || '0.0'}</span>
+              </div>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Motion Coherence</span>
+                <span className={`font-code-sm ${results?.blur?.details?.directionalCoherence > 0.15 ? 'text-error' : 'text-primary'}`}>
+                  {results?.blur?.details?.directionalCoherence?.toFixed(3) || '0.000'}
+                </span>
+              </div>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Spatial Dist.</span>
+                <span className="text-primary font-code-sm">{results?.blur?.details?.lowerQuartileBlockSharpness?.toFixed(1) || '0.0'}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Brightness Card */}
+        {/* Brightness Card (Refined) */}
         <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">wb_sunny</span>
-              <h3 className="font-headline-md text-headline-md">Luminance</h3>
+              <span className={`material-symbols-outlined ${brightnessInfo?.color || 'text-secondary'}`}>
+                {brightnessInfo?.icon || 'wb_sunny'}
+              </span>
+              <h3 className="font-headline-md text-headline-md">Exposure</h3>
             </div>
-            <span className="text-on-surface-variant font-code-sm">
-              {results?.brightness?.meanLuminance?.toFixed(1) || 'N/A'} cd/m²
-            </span>
+            <div className="flex flex-col items-end">
+              <span className="font-code-sm text-[10px] text-outline uppercase">Contrast</span>
+              <span className="font-headline-sm text-primary">
+                {results?.brightness?.details?.rmsContrast?.toFixed(1) || '0.0'}
+              </span>
+            </div>
           </div>
-          <div className="flex-1 flex items-end gap-1">
-            <div className="bg-surface-container-highest w-full h-8 rounded-sm"></div>
-            <div className="bg-surface-container-highest w-full h-12 rounded-sm"></div>
-            <div className="bg-secondary w-full h-24 rounded-sm"></div>
-            <div className="bg-secondary w-full h-20 rounded-sm"></div>
-            <div className="bg-surface-container-highest w-full h-10 rounded-sm"></div>
-            <div className="bg-surface-container-highest w-full h-6 rounded-sm"></div>
+          
+          <div className="flex-1 space-y-md">
+            <div>
+              <p className={`font-headline-sm ${brightnessInfo?.color || 'text-primary'}`}>
+                {brightnessInfo?.label || 'Calculating...'}
+              </p>
+              <p className="text-body-md text-on-surface-variant mt-1">
+                {brightnessInfo?.desc}
+              </p>
+            </div>
+
+            <div className="p-md bg-surface-container-low rounded-lg space-y-xs border border-outline-variant">
+              <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Light Map</p>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Median Luminance</span>
+                <span className="text-primary font-code-sm">{results?.brightness?.details?.medianLuminance || '0'}</span>
+              </div>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Clipping Ratio</span>
+                <span className={`font-code-sm ${results?.brightness?.details?.blownRegionRatio > 0.1 ? 'text-error' : 'text-primary'}`}>
+                  {Math.round((results?.brightness?.details?.blownRegionRatio || 0) * 100)}%
+                </span>
+              </div>
+              <div className="flex justify-between text-label-md">
+                <span className="text-outline">Spatial Balance</span>
+                <span className="text-primary font-code-sm">{results?.brightness?.details?.weightedLuminance?.toFixed(0) || '0'}</span>
+              </div>
+            </div>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.brightness?.issue 
-              ? `Exposure issue detected: ${results.brightness.issue}` 
-              : 'Balanced exposure detected. Mid-tone distribution is within nominal parameters.'}
-          </p>
         </div>
 
         {/* Duplicate Detection Card */}
@@ -169,29 +216,28 @@ const JobResults: React.FC = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
               <span className="material-symbols-outlined text-secondary">content_copy</span>
-              <h3 className="font-headline-md text-headline-md">Similarity</h3>
+              <h3 className="font-headline-md text-headline-md">Uniqueness</h3>
             </div>
-            {results?.duplicate?.matchFound && (
-              <span className="text-error font-code-sm">MATCH FOUND</span>
+            {results?.duplicate?.passed === false && (
+              <span className="text-error font-code-sm">DUPLICATE</span>
             )}
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="relative flex -space-x-8">
-              <div className="w-20 h-20 rounded-lg border-4 border-white shadow-lg bg-surface-container-highest flex items-center justify-center">
-                <span className="material-symbols-outlined text-3xl text-outline">image</span>
+          <div className="flex-1 flex flex-col gap-md">
+            <div className="p-md bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-lg">
+              <div className="w-16 h-16 rounded border-2 border-outline-variant bg-surface-container-highest flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl text-outline">fingerprint</span>
               </div>
-              {results?.duplicate?.matchFound && (
-                <div className="w-20 h-20 rounded-lg border-4 border-white shadow-lg bg-surface-container-highest flex items-center justify-center opacity-60">
-                  <span className="material-symbols-outlined text-3xl text-outline">image</span>
-                </div>
-              )}
+              <div className="space-y-1">
+                <p className="text-label-md text-outline uppercase tracking-widest font-bold">dHash (Perceptual)</p>
+                <p className="font-code-sm text-primary text-[10px] truncate w-[160px]">{results?.duplicate?.details?.dHash || 'Not Generated'}</p>
+              </div>
             </div>
+            <p className="text-body-md text-on-surface-variant">
+              {results?.duplicate?.passed === false 
+                ? `Highly similar image detected (${results.duplicate.details.duplicateType}). Match distance: ${results.duplicate.details.hammingDistance}.`
+                : 'Unique visual signature. No perceptually similar images found in recent history.'}
+            </p>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.duplicate?.matchFound 
-              ? `Duplicate match found in database (distance: ${results.duplicate.hammingDistance}).`
-              : 'Low duplication probability. Unique visual signature confirmed.'}
-          </p>
         </div>
 
         {/* Screenshot Detection Card */}
@@ -199,30 +245,34 @@ const JobResults: React.FC = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
               <span className="material-symbols-outlined text-secondary">screenshot</span>
-              <h3 className="font-headline-md text-headline-md">UI Detection</h3>
+              <h3 className="font-headline-md text-headline-md">Origin</h3>
             </div>
-            {results?.screenshot?.isScreenshot && (
+            {results?.screenshot?.passed === false && (
               <div className="flex items-center gap-xs text-error font-label-md">
                 <span className="material-symbols-outlined text-[16px]">warning</span>
                 <span>Flagged</span>
               </div>
             )}
           </div>
-          <div className="flex-1 flex flex-wrap gap-sm content-start">
-            {results?.screenshot?.reasons?.map((reason: string, i: number) => (
-              <div key={i} className="px-sm py-xs bg-error-container text-on-error-container rounded-sm font-label-md">
-                {reason}
-              </div>
-            ))}
-            {!results?.screenshot?.isScreenshot && (
-              <div className="px-sm py-xs bg-surface-container-highest text-outline rounded-sm font-label-md">Native Content</div>
-            )}
+          <div className="flex-1 flex flex-col gap-sm">
+            <div className="flex flex-wrap gap-xs">
+              {results?.screenshot?.details?.scoreBreakdown && Object.entries(results.screenshot.details.scoreBreakdown).map(([key, val]: any) => (
+                val > 0 && (
+                  <div key={key} className="px-sm py-xs bg-error-container text-on-error-container rounded-sm font-label-sm text-[10px] uppercase">
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </div>
+                )
+              ))}
+              {results?.screenshot?.passed && (
+                <div className="px-sm py-xs bg-secondary/10 text-secondary border border-secondary/20 rounded-sm font-label-sm text-[10px] uppercase">Native Camera</div>
+              )}
+            </div>
+            <p className="text-body-md text-on-surface-variant mt-auto">
+              {results?.screenshot?.passed === false 
+                ? `Device-capture heuristics flagged (Score: ${results.screenshot.details.totalScore}/8). Likely non-native content.`
+                : 'No UI markers, exact screen resolutions, or color palette entropy issues detected.'}
+            </p>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.screenshot?.isScreenshot 
-              ? 'Potential screenshot material detected via heuristic analysis.'
-              : 'No UI overlays or mobile device resolutions detected.'}
-          </p>
         </div>
 
         {/* OCR Detection Card */}
@@ -230,29 +280,32 @@ const JobResults: React.FC = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
               <span className="material-symbols-outlined text-secondary">spellcheck</span>
-              <h3 className="font-headline-md text-headline-md">OCR Extracted</h3>
+              <h3 className="font-headline-md text-headline-md">Identity Extraction</h3>
             </div>
-            <span className="material-symbols-outlined text-outline">translate</span>
+            <div className="flex flex-col items-end">
+              <span className="font-code-sm text-[10px] text-outline uppercase">Confidence</span>
+              <span className="font-headline-sm text-primary">
+                {Math.round((results?.ocr?.details?.ocrWordConfidence || 0) * 100)}%
+              </span>
+            </div>
           </div>
           <div className="flex-1 space-y-sm">
-            <div className="p-sm bg-surface-container-low border border-outline-variant rounded-lg font-code-sm text-on-surface min-h-[60px] max-h-[100px] overflow-y-auto">
-              {results?.ocr?.text || '"No text detected"'}
+            <div className="p-sm bg-surface-container-low border border-outline-variant rounded-lg font-code-sm text-on-surface min-h-[80px] max-h-[120px] overflow-y-auto italic text-on-surface-variant">
+              "{results?.ocr?.details?.correctedText || 'No clear characters extracted'}"
             </div>
-            {results?.ocr?.platesFound && results.ocr.platesFound.length > 0 && (
-              <div className="flex flex-wrap gap-xs">
-                {results.ocr.platesFound.map((plate: string, i: number) => (
-                  <span key={i} className="px-xs py-[2px] bg-secondary/10 text-secondary border border-secondary/20 rounded font-label-md text-[10px]">
-                    {plate}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-xs">
+              {results?.ocr?.details?.detectedPlates?.map((plate: string, i: number) => (
+                <span key={i} className="px-sm py-1 bg-secondary text-on-secondary rounded font-bold text-label-md tracking-widest border border-secondary">
+                  {plate}
+                </span>
+              ))}
+              {results?.ocr?.details?.partialMatches?.length > 0 && results?.ocr?.details?.detectedPlates?.length === 0 && (
+                <span className="px-sm py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded font-label-md">
+                  Partial: {results.ocr.details.partialMatches[0]}
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.ocr?.platesFound?.length > 0
-              ? 'Number plates successfully extracted.'
-              : 'No restricted patterns found in extracted text.'}
-          </p>
         </div>
 
         {/* Dimension Validation Card */}
@@ -260,39 +313,43 @@ const JobResults: React.FC = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-sm">
               <span className="material-symbols-outlined text-secondary">aspect_ratio</span>
-              <h3 className="font-headline-md text-headline-md">Dimensions</h3>
+              <h3 className="font-headline-md text-headline-md">Specifications</h3>
             </div>
             <span className="text-on-surface-variant font-code-sm">
-              {results?.dimensions?.aspectRatio?.toFixed(2) || 'N/A'} : 1
+              {results?.dimensions?.details?.aspectRatio?.toFixed(2) || '0.00'} AR
             </span>
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-3/4 aspect-video border-2 border-dashed border-secondary/40 rounded flex items-center justify-center bg-secondary/5">
+          <div className="flex-1 flex flex-col gap-md">
+            <div className="flex-1 flex items-center justify-center bg-surface-container-low rounded-lg border border-outline-variant">
               <div className="text-center">
-                <p className="font-headline-md text-secondary">
-                  {results?.dimensions?.width || 0} x {results?.dimensions?.height || 0}
+                <p className="font-headline-md text-primary">
+                  {results?.dimensions?.details?.width || 0} × {results?.dimensions?.details?.height || 0}
+                </p>
+                <p className="text-label-md text-outline uppercase tracking-widest mt-1">
+                  {results?.dimensions?.details?.megapixels?.toFixed(1)} Megapixels
                 </p>
               </div>
             </div>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-sm">
+                <span className="material-symbols-outlined text-outline">data_usage</span>
+                <span className="text-body-md text-on-surface-variant">{results?.dimensions?.details?.fileSizeMB?.toFixed(2)} MB</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${results?.dimensions?.passed ? 'bg-secondary/10 text-secondary' : 'bg-error-container text-on-error-container'}`}>
+                {results?.dimensions?.passed ? 'Compliant' : 'Out of Bounds'}
+              </span>
+            </div>
           </div>
-          <p className="text-body-md text-on-surface-variant">
-            {results?.dimensions?.isValid 
-              ? 'Aspect ratio and dimensions validated against limits.'
-              : 'Dimensions failed validation criteria.'}
-          </p>
         </div>
 
       </div>
 
       {/* Action Footer */}
       <footer className="mt-2xl pt-xl border-t border-outline-variant flex justify-between items-center">
-        <div className="flex items-center gap-md">
-          <div className="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed-variant">
-            <span className="material-symbols-outlined">verified_user</span>
-          </div>
-          <div>
-            <p className="font-label-md text-primary font-bold">Pipeline Processed</p>
-            <p className="text-label-md text-outline">ID: {job.id}</p>
+        <div className="flex items-center gap-md text-outline font-body-md">
+          <div className="flex items-center gap-xs">
+            <span className="material-symbols-outlined text-[18px]">verified_user</span>
+            <span>Security Signature: {job.id.substring(0, 16)}</span>
           </div>
         </div>
         <div className="flex gap-md">
@@ -301,7 +358,7 @@ const JobResults: React.FC = () => {
           </Link>
           <button className="px-lg py-md bg-primary text-on-primary rounded-lg font-label-md flex items-center gap-sm hover:opacity-90 transition-opacity">
             <span className="material-symbols-outlined text-[20px]">file_download</span>
-            Export Report
+            Download Full Report
           </button>
         </div>
       </footer>

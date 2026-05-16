@@ -7,17 +7,102 @@ import {
   BRIGHTNESS_DARK_MASS_RATIO,
   BRIGHTNESS_BLOWN_PIXEL_THRESHOLD,
   BRIGHTNESS_BLOWN_RATIO,
-  BRIGHTNESS_PLATE_ZONE_DARK_THRESHOLD,
 } from '../utils/constants';
 
 /**
- * Brightness Analysis — 4-Signal Histogram Analysis
+ * Brightness Analysis — Perceptual Exposure Pipeline
  * 
- * 1. Mean Luminance: Overall exposure balance.
- * 2. Dark Pixel Mass: Detection of large nearly-black regions.
- * 3. Blown Highlight Detection: High-exposure clipping detection.
- * 4. Plate Zone Check: Ensures the vehicle plate area is not underexposed.
+ * Upgrades:
+ * 1. Histogram Percentile Analysis (P5, P50, P95)
+ * 2. Connected Highlight Region Detection (Filters specular highlights)
+ * 3. RMS Contrast Metric (Measures clarity and tonal separation)
+ * 4. Gaussian Spatial Weighting (Prioritizes lower-center regions)
+ * 5. Sigmoid Confidence Scoring (Non-linear perceptual matching)
  */
+
+/** Extracts P5, P50 (median), and P95 from image histogram */
+function computeHistogramPercentiles(data: Uint8Array): { p5: number; p50: number; p95: number } {
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < data.length; i++) histogram[data[i]]++;
+
+  const total = data.length;
+  let p5 = 0, p50 = 0, p95 = 0;
+  let acc = 0;
+
+  for (let i = 0; i < 256; i++) {
+    acc += histogram[i];
+    if (p5 === 0 && acc >= total * 0.05) p5 = i;
+    if (p50 === 0 && acc >= total * 0.50) p50 = i;
+    if (p95 === 0 && acc >= total * 0.95) p95 = i;
+  }
+  return { p5, p50, p95 };
+}
+
+/** Computes RMS Contrast (Root Mean Square Deviation) */
+function computeRMSContrast(data: Uint8Array, mean: number): number {
+  let sumSqDiff = 0;
+  for (let i = 0; i < data.length; i++) {
+    sumSqDiff += (data[i] - mean) ** 2;
+  }
+  return Math.sqrt(sumSqDiff / data.length);
+}
+
+/** 
+ * Finds the largest connected blown region using a coarse 16x16 grid.
+ * This filters out small specular highlights like headlights or chrome reflections.
+ */
+function getLargestBlownRegionRatio(data: Uint8Array, width: number, height: number): number {
+  const GRID_SIZE = 16;
+  const grid = new Uint8Array(GRID_SIZE * GRID_SIZE);
+  const blockW = Math.floor(width / GRID_SIZE);
+  const blockH = Math.floor(height / GRID_SIZE);
+
+  for (let gy = 0; gy < GRID_SIZE; gy++) {
+    for (let gx = 0; gx < GRID_SIZE; gx++) {
+      let blownInBlock = 0;
+      for (let y = gy * blockH; y < (gy + 1) * blockH; y++) {
+        for (let x = gx * blockW; x < (gx + 1) * blockW; x++) {
+          if (data[y * width + x] >= BRIGHTNESS_BLOWN_PIXEL_THRESHOLD) blownInBlock++;
+        }
+      }
+      if (blownInBlock / (blockW * blockH) > 0.5) grid[gy * GRID_SIZE + gx] = 1;
+    }
+  }
+
+  // Simple seed-fill to find max connected component
+  let maxArea = 0;
+  const visited = new Set<number>();
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i] === 1 && !visited.has(i)) {
+      let area = 0;
+      const stack = [i];
+      visited.add(i);
+      while (stack.length > 0) {
+        const curr = stack.pop()!;
+        area++;
+        const cx = curr % GRID_SIZE;
+        const cy = Math.floor(curr / GRID_SIZE);
+        [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dx, dy]) => {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          const ni = ny * GRID_SIZE + nx;
+          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[ni] === 1 && !visited.has(ni)) {
+            visited.add(ni);
+            stack.push(ni);
+          }
+        });
+      }
+      maxArea = Math.max(maxArea, area);
+    }
+  }
+  return maxArea / (GRID_SIZE * GRID_SIZE);
+}
+
+/** Logistic sigmoid for non-linear confidence mapping */
+function sigmoid(x: number, k: number = 10, x0: number = 0.5): number {
+  return 1 / (1 + Math.exp(-k * (x - x0)));
+}
+
 export async function analyzeBrightness(filePath: string): Promise<CheckResult> {
   const { data, info } = await sharp(filePath)
     .grayscale()
@@ -25,93 +110,78 @@ export async function analyzeBrightness(filePath: string): Promise<CheckResult> 
     .toBuffer({ resolveWithObject: true });
 
   const { width, height } = info;
-  const pixelCount = width * height;
+  const pixels = new Uint8Array(data);
 
-  // Signal 1: Mean Luminance
+  // 1. Histogram Percentiles
+  const { p5, p50: medianLuminance, p95 } = computeHistogramPercentiles(pixels);
+
+  // 2. Local Contrast (RMS)
   let sum = 0;
-  let darkCount = 0;
-  let blownCount = 0;
+  for (let i = 0; i < pixels.length; i++) sum += pixels[i];
+  const meanLuminance = sum / pixels.length;
+  const rmsContrast = computeRMSContrast(pixels, meanLuminance);
 
-  // Signal 4: Plate Zone (Center-Bottom)
-  // ROI: x=[width*0.15, width*0.85], y=[height*0.55, height*0.95]
-  const pX1 = Math.floor(width * 0.15);
-  const pX2 = Math.floor(width * 0.85);
-  const pY1 = Math.floor(height * 0.55);
-  const pY2 = Math.floor(height * 0.95);
-  
-  let plateSum = 0;
-  let plateCount = 0;
-
+  // 3. Spatial Importance (Gaussian-style weighting for lower-center)
+  let weightedSum = 0;
+  let totalWeight = 0;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      const val = data[idx];
-      
-      sum += val;
-      if (val < BRIGHTNESS_DARK_PIXEL_THRESHOLD) darkCount++;
-      if (val >= BRIGHTNESS_BLOWN_PIXEL_THRESHOLD) blownCount++;
-      
-      if (x >= pX1 && x < pX2 && y >= pY1 && y < pY2) {
-        plateSum += val;
-        plateCount++;
-      }
+      // Gaussian center at (0.5w, 0.75h)
+      const dx = (x / width - 0.5) / 0.3;
+      const dy = (y / height - 0.75) / 0.25;
+      const weight = Math.exp(-(dx * dx + dy * dy));
+      weightedSum += pixels[y * width + x] * weight;
+      totalWeight += weight;
     }
   }
+  const weightedLuminance = weightedSum / totalWeight;
 
-  const meanLuminance = sum / pixelCount;
-  const darkPixelRatio = darkCount / pixelCount;
-  const blownPixelRatio = blownCount / pixelCount;
-  const plateZoneMean = plateCount > 0 ? plateSum / plateCount : 128; // Default to mid if area is empty
+  // 4. Overexposure (Connected Regions)
+  const blownRegionRatio = getLargestBlownRegionRatio(pixels, width, height);
+
+  // 5. Underexposure detail retention (Spread between P5 and P50)
+  const shadowSpread = medianLuminance - p5;
 
   // VERDICT LOGIC
   const failures: string[] = [];
-  
-  if (meanLuminance < BRIGHTNESS_TOO_DARK) failures.push('too_dark');
-  if (meanLuminance > BRIGHTNESS_TOO_BRIGHT) failures.push('too_bright');
-  if (darkPixelRatio > BRIGHTNESS_DARK_MASS_RATIO) failures.push('too_dark_mass');
-  if (blownPixelRatio > BRIGHTNESS_BLOWN_RATIO) failures.push('overexposed_regions');
-  if (plateZoneMean < BRIGHTNESS_PLATE_ZONE_DARK_THRESHOLD) failures.push('plate_zone_too_dark');
+  if (medianLuminance < BRIGHTNESS_TOO_DARK) failures.push('underexposed');
+  if (medianLuminance > BRIGHTNESS_TOO_BRIGHT) failures.push('overexposed');
+  if (p5 < 10 && shadowSpread < 20) failures.push('shadow_clipping');
+  if (p95 > 250 && blownRegionRatio > 0.15) failures.push('highlight_clipping');
+  if (rmsContrast < 25) failures.push('low_contrast');
+  if (weightedLuminance < 45) failures.push('localized_underexposure');
 
   const passed = failures.length === 0;
-  
-  let verdict: string = 'ok';
-  if (failures.includes('too_dark') || failures.includes('too_dark_mass')) {
-    verdict = 'too_dark';
-  } else if (failures.includes('overexposed_regions') || failures.includes('too_bright')) {
-    verdict = 'too_bright';
-  } else if (failures.includes('plate_zone_too_dark')) {
-    verdict = 'plate_zone_dark';
-  }
-  if (failures.length > 1 && verdict !== 'ok') {
-    verdict = 'multiple_issues';
-  }
 
-  // CONFIDENCE CALCULATION (Continuous scale)
-  const meanScore  = 1 - clamp(Math.abs(meanLuminance - 128) / 88, 0, 1);
-  const darkScore  = 1 - clamp(darkPixelRatio / BRIGHTNESS_DARK_MASS_RATIO, 0, 1);
-  const blownScore = 1 - clamp(blownPixelRatio / BRIGHTNESS_BLOWN_RATIO, 0, 1);
-  const plateScore = clamp((plateZoneMean - 30) / 80, 0, 1);
-  
-  const confidence = (0.30 * meanScore) + (0.25 * darkScore) + (0.25 * blownScore) + (0.20 * plateScore);
+  let verdict = 'ok';
+  if (failures.length > 0) {
+    if (failures.includes('underexposed') || failures.includes('shadow_clipping')) verdict = 'too_dark';
+    else if (failures.includes('overexposed') || failures.includes('highlight_clipping')) verdict = 'too_bright';
+    else verdict = failures[0];
+  }
+  if (failures.length > 2) verdict = 'multiple_issues';
+
+  // SIGMOID CONFIDENCE SCORING
+  const contrastScore = sigmoid(rmsContrast, 0.15, 40);
+  const shadowScore   = sigmoid(shadowSpread, 0.1, 30);
+  const highlightScore = 1 - sigmoid(blownRegionRatio, 20, 0.2);
+  const medianScore   = 1 - clamp(Math.abs(medianLuminance - 128) / 100, 0, 1);
+
+  const confidence = (0.3 * medianScore) + (0.3 * contrastScore) + (0.2 * shadowScore) + (0.2 * highlightScore);
 
   return {
     checkName: 'brightness_analysis',
     passed,
-    confidence,
+    confidence: Math.round(confidence * 100) / 100,
     details: {
       meanLuminance: Math.round(meanLuminance * 100) / 100,
-      darkPixelRatio: Math.round(darkPixelRatio * 1000) / 1000,
-      blownPixelRatio: Math.round(blownPixelRatio * 1000) / 1000,
-      plateZoneMean: Math.round(plateZoneMean * 100) / 100,
+      medianLuminance,
+      percentiles: { p5, p50: medianLuminance, p95 },
+      rmsContrast: Math.round(rmsContrast * 100) / 100,
+      blownRegionRatio: Math.round(blownRegionRatio * 100) / 100,
+      weightedLuminance: Math.round(weightedLuminance * 100) / 100,
       failures,
       verdict,
-      thresholds: {
-        tooDark: BRIGHTNESS_TOO_DARK,
-        tooBright: BRIGHTNESS_TOO_BRIGHT,
-        darkMassRatio: BRIGHTNESS_DARK_MASS_RATIO,
-        blownRatio: BRIGHTNESS_BLOWN_RATIO,
-        plateZoneDark: BRIGHTNESS_PLATE_ZONE_DARK_THRESHOLD
-      }
     }
   };
 }

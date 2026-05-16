@@ -10,12 +10,12 @@
 /** Laplacian variance below this → image considered blurry.
  *  Empirically calibrated on a dataset of 500 real-world images;
  *  values < 80 reliably identify motion blur / out-of-focus shots. */
-export const BLUR_THRESHOLD = 80;
-export const BLUR_TENENGRAD_THRESHOLD = 200;
-export const BLUR_MEDIAN_BLOCK_THRESHOLD = 80;
-export const BLUR_ORIENTATION_ENTROPY_THRESHOLD = 2.8;
-export const BLUR_MIN_ENTROPY_FOR_ROI = 2.2;
-export const BLUR_HIGH_LAPLACIAN_THRESHOLD = 150;
+export const BLUR_THRESHOLD = 60;
+export const BLUR_TENENGRAD_THRESHOLD = 150;
+export const BLUR_LOWER_QUARTILE_BLOCK_THRESHOLD = 50;
+export const BLUR_COHERENCE_THRESHOLD = 0.15;
+export const BLUR_MIN_ENTROPY_FOR_ROI = 3.0;
+export const BLUR_HIGH_LAPLACIAN_THRESHOLD = 120;
 
 /** Normalising divisor for confidence: variance=500 → confidence=1.0. */
 export const BLUR_CONFIDENCE_DIVISOR = 500;

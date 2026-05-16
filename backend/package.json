@@ -23,7 +23,7 @@
     "exif-reader": "^2.0.1",
     "express": "^4.19.2",
     "express-async-errors": "^3.1.1",
-    "file-type": "^19.0.0",
+    "file-type": "^16.5.4",
     "helmet": "^7.1.0",
     "ioredis": "^5.3.2",
     "morgan": "^1.10.0",

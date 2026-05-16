@@ -64,8 +64,8 @@ export async function runAllAnalyses(
       checks.push(checkResult);
 
       // Extract perceptual hash from duplicate detection result
-      if (name === 'duplicate_detection' && checkResult.hash) {
-        perceptualHash = checkResult.hash;
+      if (name === 'duplicate_detection' && checkResult.details?.dHash) {
+        perceptualHash = checkResult.details.dHash as string;
       }
 
       logger.info(

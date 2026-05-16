@@ -11,6 +11,8 @@
  *  Empirically calibrated on a dataset of 500 real-world images;
  *  values < 80 reliably identify motion blur / out-of-focus shots. */
 export const BLUR_THRESHOLD = 80;
+export const BLUR_TENENGRAD_THRESHOLD = 200;
+export const BLUR_PEAK_BLOCK_THRESHOLD = 120;
 
 /** Normalising divisor for confidence: variance=500 → confidence=1.0.
  *  Sharp images produced by modern smartphones rarely exceed ~1000,
@@ -23,6 +25,11 @@ export const BRIGHTNESS_TOO_DARK = 40;
 
 /** Mean luminance above this → image is overexposed. */
 export const BRIGHTNESS_TOO_BRIGHT = 220;
+export const BRIGHTNESS_DARK_PIXEL_THRESHOLD = 30;
+export const BRIGHTNESS_DARK_MASS_RATIO = 0.35;
+export const BRIGHTNESS_BLOWN_PIXEL_THRESHOLD = 250;
+export const BRIGHTNESS_BLOWN_RATIO = 0.20;
+export const BRIGHTNESS_PLATE_ZONE_DARK_THRESHOLD = 50;
 
 /** Width of the "near-threshold" zone for confidence scaling. */
 export const BRIGHTNESS_CONFIDENCE_MARGIN = 30;
@@ -39,6 +46,9 @@ export const DUPLICATE_HAMMING_THRESHOLD = 10;
 // ─── Screenshot Detection ─────────────────────────────────────────────────────
 /** Edge-density ratio above this → image has UI-like straight-edge content. */
 export const SCREENSHOT_EDGE_DENSITY_THRESHOLD = 0.35;
+export const SCREENSHOT_PALETTE_THRESHOLD = 180;
+export const SCREENSHOT_FLAT_RATIO_THRESHOLD = 0.40;
+export const SCREENSHOT_SCORE_THRESHOLD = 3;
 
 /** Number of sub-checks that must flag before the overall check fails. */
 export const SCREENSHOT_FLAG_THRESHOLD = 2;
@@ -70,8 +80,9 @@ export const SCREENSHOT_EXIF_KEYWORDS = [
 // ─── Dimension Validation ─────────────────────────────────────────────────────
 export const DIMENSION_MIN_PIXELS = 200;
 export const DIMENSION_MAX_PIXELS = 8000;
-export const DIMENSION_MIN_ASPECT_RATIO = 0.3;
-export const DIMENSION_MAX_ASPECT_RATIO = 4.0;
+export const DIMENSION_MIN_ASPECT_RATIO = 0.25;
+export const DIMENSION_MAX_ASPECT_RATIO = 5.0;
+export const DIMENSION_MIN_FILE_SIZE_BYTES = 15000;
 
 // ─── OCR — Number Plate ───────────────────────────────────────────────────────
 /** Standard Indian vehicle registration plate: MH12AB1234 */

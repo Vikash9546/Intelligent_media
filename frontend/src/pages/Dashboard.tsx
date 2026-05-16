@@ -4,17 +4,19 @@ import { Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ total: 0, completed: 0, failed: 0, processing: 0 });
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
 
   useEffect(() => {
     // In a real app we would have an endpoint for aggregate stats.
     // Since our backend only provides a list of jobs with filters, we can just use total count from /jobs
-    const fetchStats = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const [allRes, compRes, failRes, procRes] = await Promise.all([
+        const [allRes, compRes, failRes, procRes, latestRes] = await Promise.all([
           axios.get('/api/v1/jobs?limit=1'),
           axios.get('/api/v1/jobs?status=completed&limit=1'),
           axios.get('/api/v1/jobs?status=failed&limit=1'),
-          axios.get('/api/v1/jobs?status=processing&limit=1')
+          axios.get('/api/v1/jobs?status=processing&limit=1'),
+          axios.get('/api/v1/jobs?limit=5')
         ]);
         
         setStats({
@@ -23,11 +25,13 @@ const Dashboard: React.FC = () => {
           failed: failRes.data.total || 0,
           processing: procRes.data.total || 0,
         });
+
+        setRecentJobs(latestRes.data.jobs || []);
       } catch (error) {
-        console.error("Failed to fetch stats", error);
+        console.error("Failed to fetch dashboard data", error);
       }
     };
-    fetchStats();
+    fetchDashboardData();
   }, []);
 
   return (
@@ -107,59 +111,50 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
-                {/* Placeholder rows matching design */}
-                <tr className="hover:bg-surface-container-low/30 transition-colors">
-                  <td className="px-lg py-md">
-                    <div className="flex items-center gap-md">
-                      <div className="p-xs bg-primary/5 rounded border border-outline-variant">
-                        <span className="material-symbols-outlined text-primary text-[20px]" data-icon="image">image</span>
+                {recentJobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-surface-container-low/30 transition-colors">
+                    <td className="px-lg py-md">
+                      <div className="flex items-center gap-md">
+                        <div className="p-xs bg-primary/5 rounded border border-outline-variant">
+                          <span className="material-symbols-outlined text-primary text-[20px]" data-icon="image">image</span>
+                        </div>
+                        <div>
+                          <p className="font-body-md font-semibold">{job.originalFilename}</p>
+                          <p className="text-xs text-outline">{job.mimeType} • {(job.fileSizeBytes / 1024 / 1024).toFixed(1)} MB</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-body-md font-semibold">campaign_hero_raw_01.jpg</p>
-                        <p className="text-xs text-outline">4.2 MB • JPEG</p>
+                    </td>
+                    <td className="px-lg py-md">
+                      <div className={`flex items-center gap-xs font-label-md ${
+                        job.status === 'completed' ? 'text-emerald-600' : 
+                        job.status === 'failed' ? 'text-error' : 'text-secondary'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          job.status === 'completed' ? 'bg-emerald-600' : 
+                          job.status === 'failed' ? 'bg-error' : 'bg-secondary animate-pulse'
+                        }`}></span>
+                        {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-lg py-md">
-                    <div className="flex items-center gap-xs text-emerald-600 font-label-md">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      Success
-                    </div>
-                  </td>
-                  <td className="px-lg py-md">
-                    <p className="font-label-md">100%</p>
-                  </td>
-                  <td className="px-lg py-md">
-                    <button className="material-symbols-outlined text-outline hover:text-primary transition-colors" data-icon="more_vert">more_vert</button>
-                  </td>
-                </tr>
-                <tr className="hover:bg-surface-container-low/30 transition-colors">
-                  <td className="px-lg py-md">
-                    <div className="flex items-center gap-md">
-                      <div className="p-xs bg-primary/5 rounded border border-outline-variant">
-                        <span className="material-symbols-outlined text-primary text-[20px]" data-icon="image">image</span>
-                      </div>
-                      <div>
-                        <p className="font-body-md font-semibold">podcast_cover_art.png</p>
-                        <p className="text-xs text-outline">1.2 MB • PNG</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-lg py-md">
-                    <div className="flex items-center gap-xs text-secondary font-label-md">
-                      <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
-                      Processing
-                    </div>
-                  </td>
-                  <td className="px-lg py-md w-32">
-                    <div className="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
-                      <div className="progress-gradient h-full w-[45%]"></div>
-                    </div>
-                  </td>
-                  <td className="px-lg py-md">
-                    <button className="material-symbols-outlined text-outline hover:text-primary transition-colors" data-icon="more_vert">more_vert</button>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-lg py-md">
+                      {job.status === 'processing' ? (
+                        <div className="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+                          <div className="progress-gradient h-full w-[45%]"></div>
+                        </div>
+                      ) : (
+                        <p className="font-label-md">{job.status === 'completed' ? '100%' : '0%'}</p>
+                      )}
+                    </td>
+                    <td className="px-lg py-md">
+                      <Link to={`/jobs/${job.id}`} className="material-symbols-outlined text-outline hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</Link>
+                    </td>
+                  </tr>
+                ))}
+                {recentJobs.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-lg py-xl text-center text-outline">No activity yet.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -186,37 +181,41 @@ const Dashboard: React.FC = () => {
             <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
           </div>
           <div className="p-lg space-y-lg overflow-y-auto max-h-[400px]">
-            {/* Activity Item 1 */}
-            <div className="flex gap-md relative">
-              <div className="absolute left-2.5 top-8 bottom-0 w-[1px] bg-outline-variant"></div>
-              <div className="relative z-10 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center border-2 border-white">
-                <span className="material-symbols-outlined text-emerald-600 text-[12px]" data-icon="check">check</span>
-              </div>
-              <div className="pb-lg">
-                <p className="font-body-md"><span className="font-bold">Project Alpha</span> metadata extraction finished.</p>
-                <p className="text-xs text-outline mt-base">2 mins ago • Engine Node 4</p>
-              </div>
-            </div>
-            {/* Activity Item 2 */}
-            <div className="flex gap-md relative">
-              <div className="absolute left-2.5 top-8 bottom-0 w-[1px] bg-outline-variant"></div>
-              <div className="relative z-10 w-5 h-5 rounded-full bg-secondary-fixed flex items-center justify-center border-2 border-white">
-                <span className="material-symbols-outlined text-secondary text-[12px] animate-spin" data-icon="autorenew">autorenew</span>
-              </div>
-              <div className="pb-lg">
-                <p className="font-body-md"><span className="font-bold">Image_042</span> rendering analysis...</p>
-                <p className="text-xs text-outline mt-base">12 mins ago • Worker Queue</p>
-                <div className="mt-sm p-sm bg-surface-container-low rounded border border-outline-variant">
-                  <div className="flex justify-between font-label-md mb-xs">
-                    <span>45%</span>
-                    <span>Processing</span>
-                  </div>
-                  <div className="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
-                    <div className="bg-secondary h-full w-[45%]"></div>
-                  </div>
+            {recentJobs.map((job, idx) => (
+              <div key={job.id} className="flex gap-md relative">
+                {idx < recentJobs.length - 1 && (
+                  <div className="absolute left-2.5 top-8 bottom-0 w-[1px] bg-outline-variant"></div>
+                )}
+                <div className={`relative z-10 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white ${
+                  job.status === 'completed' ? 'bg-emerald-100' : 
+                  job.status === 'failed' ? 'bg-red-100' : 'bg-secondary-fixed'
+                }`}>
+                  <span className={`material-symbols-outlined text-[12px] ${
+                    job.status === 'completed' ? 'text-emerald-600' : 
+                    job.status === 'failed' ? 'text-error' : 'text-secondary animate-spin'
+                  }`} data-icon={
+                    job.status === 'completed' ? 'check' : 
+                    job.status === 'failed' ? 'close' : 'autorenew'
+                  }>
+                    {job.status === 'completed' ? 'check' : job.status === 'failed' ? 'close' : 'autorenew'}
+                  </span>
+                </div>
+                <div className="pb-lg">
+                  <p className="font-body-md">
+                    <span className="font-bold">{job.originalFilename}</span> {
+                      job.status === 'completed' ? 'processing finished.' : 
+                      job.status === 'failed' ? 'processing failed.' : 'being analyzed...'
+                    }
+                  </p>
+                  <p className="text-xs text-outline mt-base">
+                    {new Date(job.createdAt).toLocaleTimeString()} • ID: {job.id.substring(0, 8)}
+                  </p>
                 </div>
               </div>
-            </div>
+            ))}
+            {recentJobs.length === 0 && (
+              <p className="text-center text-outline font-body-md py-lg">No activity yet.</p>
+            )}
           </div>
         </div>
       </div>

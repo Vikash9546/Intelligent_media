@@ -16,8 +16,8 @@ const JobResults: React.FC = () => {
           axios.get(`/api/v1/jobs/${id}/status`),
           axios.get(`/api/v1/jobs/${id}/results`)
         ]);
-        setJob(jobRes.data.data);
-        setResults(resultsRes.data.data);
+        setJob(jobRes.data.job);
+        setResults(resultsRes.data);
       } catch (err: any) {
         console.error(err);
         setError(err.response?.data?.message || 'Failed to fetch job data');
@@ -52,7 +52,8 @@ const JobResults: React.FC = () => {
     return { text: 'Low Quality', desc: 'May require review' };
   };
 
-  const quality = getQualityText(job.qualityScore || 0);
+  const displayScore = Math.round((job.qualityScore || 0) * 100);
+  const quality = getQualityText(displayScore);
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -67,7 +68,7 @@ const JobResults: React.FC = () => {
               {job.status}
             </span>
           </div>
-          <h1 className="font-headline-xl text-headline-xl text-primary">Processing Results</h1>
+          <h1 className="font-headline-xl text-headline-xl text-primary">{job.originalFilename || 'Processing Results'}</h1>
           <div className="flex items-center gap-md text-outline font-body-md">
             <div className="flex items-center gap-xs">
               <span className="material-symbols-outlined text-[18px]">calendar_today</span>
@@ -88,12 +89,12 @@ const JobResults: React.FC = () => {
                 className="text-secondary transition-all duration-1000 ease-out" 
                 cx="40" cy="40" fill="transparent" r="36" stroke="currentColor" 
                 strokeDasharray="226.2" 
-                strokeDashoffset={226.2 - ((job.qualityScore || 0) / 100) * 226.2} 
+                strokeDashoffset={226.2 - ((displayScore || 0) / 100) * 226.2} 
                 strokeWidth="8"
               ></circle>
             </svg>
             <div className="absolute inset-0 flex items-center justify-center font-headline-md text-primary">
-              {Math.round(job.qualityScore || 0)}
+              {displayScore}
             </div>
           </div>
           <div>

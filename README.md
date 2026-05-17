@@ -450,20 +450,20 @@ backend/
 ```
 frontend/
 ├── src/
-│   ├── main.tsx               ← Vite Client entry point
-│   ├── App.tsx                ← UI page routing & providers
+│   ├── main.jsx               ← Vite Client entry point (React JSX)
+│   ├── App.jsx                ← UI page routing & providers
 │   ├── index.css              ← Color Tokens, Material design utilities
 │   ├── components/            ← Shared custom UI building blocks
 │   ├── pages/                 ← Functional application pages
-│   │   ├── Upload.tsx         ← Dynamic drag-drop visual upload portal
-│   │   ├── Jobs.tsx           ← Historical list of verification audits
-│   │   └── JobResults.tsx     ← Multi-dimensional trust calibration dashboard
+│   │   ├── Upload.jsx         ← Dynamic drag-drop visual upload portal
+│   │   ├── Jobs.jsx           ← Historical list of verification audits
+│   │   └── JobResults.jsx     ← Multi-dimensional trust calibration dashboard
 │   └── utils/                 ← Client side utility helpers
-│       ├── analysisAdapter.ts ← Dynamic model parsing and DTO formatting
-│       ├── analysisHelpers.ts ← Interpretation wordings & score maps
-│       └── renderHelpers.tsx  ← Icon mappings & Tailwind/Material styles
+│       ├── analysisAdapter.js ← Dynamic model parsing and DTO formatting
+│       ├── analysisHelpers.js ← Interpretation wordings & score maps
+│       └── renderHelpers.jsx  ← Icon mappings & Tailwind/Material styles
 ├── index.html                 ← Application index layout
-├── vite.config.ts             ← Vite dev server & bundling rules
+├── vite.config.js             ← Vite dev server & bundling rules (React ES Modules)
 ├── tailwind.config.js         ← Custom Tailwind / CSS definitions
 └── Dockerfile                 ← Production Nginx build pipeline
 ```

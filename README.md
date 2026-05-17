@@ -434,3 +434,28 @@ src/
     ├── errors.ts          ← AppError hierarchy (fatal vs transient)
     └── constants.ts       ← All thresholds + weights (documented)
 ```
+
+---
+
+## AI Usage Disclosure
+
+### 1. Where AI Was Used
+AI assistance was utilized globally across both the backend analysis modules and the frontend visual indicators in this repository. Specifically:
+* **Backend OCR Pipeline**: Refactoring Tesseract processing into a 5-pass localized pipeline with aspect-ratio window grid calculations.
+* **Calibrated Trust Scoring**: Fusing multi-dimensional visual and integrity scoring parameters (`trustEngine.ts`).
+* **Frontend UI Adapter**: Constructing standard mapping adapter schemas to cleanly translate and interpret backend signals (`analysisAdapter.ts`).
+* **EXIF Metadata Parsing**: Extracting camera-specific GPS/device parameters and presenting them inside custom visual indicators.
+
+### 2. What AI Helped With
+* **Algorithmic Optimizations**: Designing the sliding-window rectangular block search in `findPlateCandidates` matching localized aspects (2.5–6.5).
+* **Positional Layout Scanners**: Crafting the positional swap normalization filters (e.g., `O` ➔ `0` in Indian plate districts and sequence codes).
+* **Strict Type Safety**: Formatting complex Express/TypeScript type signatures across the queue worker and model queries.
+
+### 3. Where AI Output Was Wrong
+* **Aggressive Hard Constraints**: AI initially generated strict `isProgressive` and `DPI` properties on the generic DTO models, which triggered TypeScript compilation errors as they weren't matched in the backend types. We resolved this by dynamically targeting `hasProfile` and encapsulating secondary features exclusively in the diagnostics panel.
+* **Uncertain Authenticity Scoring**: Initial AI logic attempted to lower authenticity scores when camera EXIF properties were missing, causing visually clear and secure compressed uploads to fail trust checks. This was corrected to keep missing EXIF neutral, shifting the focus of the authenticity engine onto edge anomalies, screenshots, and manipulation heuristics.
+
+### 4. How We Validated AI-Generated Code
+* **Local Sandbox Compilation**: Continuous verification using local TypeScript syntax checking (`npm run build` / `npm run typecheck`).
+* **Docker Multi-Container Verification**: Run active end-to-end recreation tasks (`docker-compose up -d --build`) to verify inter-service database migration stability, BullMQ concurrency, and Nginx rendering.
+* **Fuzzy Assertions**: Running simulated mock extractions representing complex blurred registration digits (e.g., `RJ19UC7O34` spacing variants) to confirm character recall.

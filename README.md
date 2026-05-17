@@ -79,7 +79,7 @@ A production-quality asynchronous image analysis backend built with **Node.js + 
 | **Storage Provider** | Abstraction layer that hides whether files live on local disk or S3. Zero call-site changes needed to switch. |
 | **Analysis Modules** | Each check is a single-responsibility function. New checks can be added without touching the orchestrator beyond registering them in `index.ts`. |
 
-### 🌟 Vehicle Image Trust Engine Core Upgrades
+### Vehicle Image Trust Engine Core Upgrades
 
 To support production-grade field-uploaded vehicle verification, we transitioned from basic metric comparisons to a calibrated **Multi-Dimensional Vehicle Image Trust Engine**:
 
@@ -445,7 +445,7 @@ backend/
 └── Dockerfile                 ← API & Worker multi-stage builder
 ```
 
-### 🎨 2. Visual Operational Frontend (`frontend/`)
+### 2. Visual Operational Frontend (`frontend/`)
 
 ```
 frontend/

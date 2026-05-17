@@ -116,6 +116,532 @@ const JobResults = () => {
 
   const isStillProcessing = job && (job.status === "processing" || job.status === "queued");
 
+  const handleExportReport = () => {
+    if (!job || !analysis) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to export the audit report.");
+      return;
+    }
+
+    const verificationCode = job.id.toUpperCase();
+    const formattedDate = new Date(job.createdAt).toLocaleString();
+    const scoreColor = analysis.recommendation.severity === "success" ? "#10b981" : analysis.recommendation.severity === "warning" ? "#f59e0b" : "#ef4444";
+
+    const reportHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MediaPipe Trust Audit Report - \${verificationCode}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #1c1917;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 50px;
+      line-height: 1.5;
+    }
+    
+    .header {
+      border-bottom: 2px dashed #e2e8f0;
+      padding-bottom: 24px;
+      margin-bottom: 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    
+    .logo-container {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .logo-text {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      color: #030303;
+      margin: 0;
+    }
+    
+    .logo-subtext {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #8b5cf6;
+      margin-top: 2px;
+    }
+    
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      background-color: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      color: #6d28d9;
+      padding: 6px 12px;
+      border-radius: 4px;
+    }
+
+    .report-title-container {
+      margin-bottom: 30px;
+    }
+
+    .report-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #030303;
+      margin: 0;
+    }
+    
+    .report-subtitle {
+      font-size: 12px;
+      color: #78716c;
+      margin: 4px 0 0 0;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 30px;
+      margin-bottom: 35px;
+    }
+
+    .card {
+      border: 1px solid #e7e5e4;
+      border-radius: 12px;
+      padding: 24px;
+      background-color: #fafaf9;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #78716c;
+      margin-top: 0;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e7e5e4;
+      padding-bottom: 8px;
+    }
+
+    .score-block {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .score-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 6px solid \${scoreColor};
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      background: #ffffff;
+    }
+
+    .score-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: #030303;
+      line-height: 1;
+    }
+
+    .score-label {
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #78716c;
+      margin-top: 2px;
+    }
+
+    .score-details h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0;
+      color: #030303;
+    }
+
+    .score-details p {
+      font-size: 11px;
+      color: #78716c;
+      margin: 4px 0 0 0;
+    }
+
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .meta-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid #f5f5f4;
+    }
+
+    .meta-table td.label {
+      color: #78716c;
+      font-weight: 500;
+      width: 35%;
+    }
+
+    .meta-table td.value {
+      color: #1c1917;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .recommendation-banner {
+      border: 2px solid \${scoreColor};
+      border-radius: 12px;
+      padding: 20px;
+      background-color: \${analysis.recommendation.severity === "success" ? "#f0fdf4" : analysis.recommendation.severity === "warning" ? "#fffbeb" : "#fef2f2"};
+      margin-bottom: 35px;
+    }
+
+    .recommendation-banner h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #0c0a09;
+    }
+
+    .recommendation-banner p {
+      margin: 6px 0 0 0;
+      font-size: 12px;
+      color: #44403c;
+      line-height: 1.6;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #030303;
+      margin-top: 40px;
+      margin-bottom: 18px;
+      border-bottom: 2px solid #030303;
+      padding-bottom: 6px;
+    }
+
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 30px;
+    }
+
+    .metrics-table th {
+      background-color: #fafaf9;
+      color: #78716c;
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid #e7e5e4;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+    }
+
+    .metrics-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e7e5e4;
+      vertical-align: middle;
+    }
+
+    .bold-value {
+      font-weight: 700;
+      color: #030303;
+    }
+
+    .plate-badge {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      background-color: #030303;
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .exif-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .exif-item {
+      border: 1px solid #e7e5e4;
+      border-radius: 8px;
+      padding: 14px;
+      background-color: #ffffff;
+    }
+
+    .exif-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #78716c;
+      margin-bottom: 6px;
+    }
+
+    .exif-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1c1917;
+      word-break: break-all;
+    }
+
+    .footer {
+      border-top: 1px solid #e7e5e4;
+      padding-top: 24px;
+      margin-top: 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #78716c;
+    }
+
+    .stamp {
+      border: 3px double \${scoreColor};
+      color: \${scoreColor};
+      font-weight: 800;
+      font-size: 14px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      transform: rotate(-3deg);
+      display: inline-block;
+      letter-spacing: 0.1em;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+      .no-print {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo-container">
+      <h2 class="logo-text">MediaPipe</h2>
+      <span class="logo-subtext">Trust Engine</span>
+    </div>
+    <div class="badge">AUDIT RECORD // SECURE OUTCOME</div>
+  </div>
+
+  <div class="report-title-container">
+    <h1 class="report-title">Ingestion Quality & Authenticity Audit</h1>
+    <p class="report-subtitle">Calibrated computer vision report on dynamic vehicle visual assets.</p>
+  </div>
+
+  <div class="grid-2">
+    <!-- Score Card -->
+    <div class="card">
+      <h4 class="card-title">Operational Health Index</h4>
+      <div class="score-block">
+        <div class="score-circle">
+          <span class="score-value">\${Math.round(analysis.trustScore)}</span>
+          <span class="score-label">Index</span>
+        </div>
+        <div class="score-details">
+          <h3>\${analysis.trustLevel}</h3>
+          <p>Scored across 5 distinct dimensions of visual & system trust.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Card -->
+    <div class="card">
+      <h4 class="card-title">Asset Credentials</h4>
+      <table class="meta-table">
+        <tr>
+          <td class="label">Job ID Reference</td>
+          <td class="value font-code-sm">\${job.id.substring(0, 16).toUpperCase()}</td>
+        </tr>
+        <tr>
+          <td class="label">Filename</td>
+          <td class="value">\${job.originalFilename}</td>
+        </tr>
+        <tr>
+          <td class="label">Encoding Specification</td>
+          <td class="value">\${analysis.imageMetadata?.format || "Standard Image"} (\${job.mimeType})</td>
+        </tr>
+        <tr>
+          <td class="label">Processed Timestamp</td>
+          <td class="value">\${formattedDate}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Executive Recommendation -->
+  <div class="recommendation-banner">
+    <h3>Executive Outcome Summary</h3>
+    <p><strong>\${analysis.recommendation.label}:</strong> \${analysis.recommendation.desc}</p>
+    \${analysis.recommendation.summary.length > 0 ? \`
+    <ul style="margin: 10px 0 0 0; padding-left: 20px; font-size: 11.5px; color: #44403c;">
+      \${analysis.recommendation.summary.map(s => \`<li>\${s}</li>\`).join("")}
+    </ul>\` : ""}
+  </div>
+
+  <!-- Primary Metrics Table -->
+  <h3 class="section-title">Core Analysis Matrices</h3>
+  <table class="metrics-table">
+    <thead>
+      <tr>
+        <th style="width: 25%;">Module Dimension</th>
+        <th style="width: 50%;">Dimension Insights & Details</th>
+        <th style="width: 25%; text-align: right;">Status/Outcome</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bold-value">Clarity & Focus</td>
+        <td>
+          \${analysis.blur.desc} (Edge Energy Coherence: <span class="bold-value">\${analysis.blur.details?.perceptualLabels?.edgeEnergy || "Standard"}</span>)
+        </td>
+        <td style="text-align: right; font-weight: 700; color: \${analysis.blur.severity === "success" ? "#10b981" : "#d97706"};">
+          \${analysis.blur.label.toUpperCase()}
+        </td>
+      </tr>
+      <tr>
+        <td class="bold-value">Identity Extraction</td>
+        <td>
+          Standard plate geometries identified: 
+          \${analysis.ocr.plates.length > 0 ? 
+            analysis.ocr.plates.map(p => \`<span class="plate-badge">\${p}</span>\`).join(" ") : 
+            \`<span style="color: #78716c; italic">No registration plate geometry extracted.</span>\`
+          }
+        </td>
+        <td style="text-align: right; font-weight: 700;">
+          \${getReadableOcrLabel(analysis.ocr.readability, analysis.ocr.confidence, analysis.ocr.plates).toUpperCase()}
+        </td>
+      </tr>
+      <tr>
+        <td class="bold-value">Illumination</td>
+        <td>
+          \${analysis.brightness.desc} (Exposure Profile: <span class="bold-value">\${analysis.brightness.details?.perceptualLabels?.exposure || "Standard"}</span>)
+        </td>
+        <td style="text-align: right; font-weight: 700; color: \${analysis.brightness.severity === "success" ? "#10b981" : "#d97706"};">
+          \${analysis.brightness.label.toUpperCase()}
+        </td>
+      </tr>
+      <tr>
+        <td class="bold-value">Authenticity</td>
+        <td>
+          Capture source: <span class="bold-value">\${analysis.authenticity.source}</span>. 
+          \${analysis.authenticity.flags.length > 0 ? 
+            \`Tamper Indicator Alerts: <span style="color: #ef4444; font-weight:700;">\${analysis.authenticity.flags.join(", ")}</span>\` : 
+            \`EXIF and structural integrity indicators verify no manipulation.\`
+          }
+        </td>
+        <td style="text-align: right; font-weight: 700; color: \${analysis.authenticity.riskLevel === "low" ? "#10b981" : "#ef4444"};">
+          \${analysis.authenticity.label.toUpperCase()}
+        </td>
+      </tr>
+      <tr>
+        <td class="bold-value">Duplicate Risk</td>
+        <td>
+          Perceptual fingerprint matches in surveillance index. Uniqueness check complete.
+        </td>
+        <td style="text-align: right; font-weight: 700; color: \${analysis.uniqueness.passed !== false ? "#10b981" : "#ef4444"};">
+          \${analysis.uniqueness.label.toUpperCase()}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Exif Hardware Grid -->
+  <h3 class="section-title">Structured Profile Specifications</h3>
+  <div class="exif-grid">
+    <div class="exif-item">
+      <div class="exif-label">Acquisition Hardware Make</div>
+      <div class="exif-val">\${analysis.imageMetadata?.cameraMake || "No EXIF Make Tag"}</div>
+    </div>
+    <div class="exif-item">
+      <div class="exif-label">Acquisition Hardware Model</div>
+      <div class="exif-val">\${analysis.imageMetadata?.cameraModel || "No EXIF Model Tag"}</div>
+    </div>
+    <div class="exif-item">
+      <div class="exif-label">Tonal Depth & Channels</div>
+      <div class="exif-val">
+        \${analysis.imageMetadata?.depth === "uchar" ? "8-bit" : analysis.imageMetadata?.depth || "8-bit"} color depth / \${analysis.imageMetadata?.channels || 3} channels
+      </div>
+    </div>
+    <div class="exif-item">
+      <div class="exif-label">Technical Resolution</div>
+      <div class="exif-val">
+        \${renderResolution(analysis.specs.width, analysis.specs.height)} (\${(analysis.specs.megapixels || 0).toFixed(2)} MP)
+      </div>
+    </div>
+    <div class="exif-item">
+      <div class="exif-label">Temporal Date tag</div>
+      <div class="exif-val">
+        \${analysis.imageMetadata?.createdDate ? new Date(analysis.imageMetadata.createdDate).toLocaleString() : "No EXIF Date Tag"}
+      </div>
+    </div>
+    <div class="exif-item">
+      <div class="exif-label">Location Context Tag</div>
+      <div class="exif-val">
+        \${analysis.imageMetadata?.gps ? 
+          \`\${analysis.imageMetadata.gps.latitude.toFixed(4)}°, \${analysis.imageMetadata.gps.longitude.toFixed(4)}°\` : 
+          "GPS Coordinates Not Embedded"
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      <p style="margin: 0; font-weight: 700; color: #1c1917;">Certified MediaPipe Trust Ingestion Outcome</p>
+      <p style="margin: 2px 0 0 0;">Integrity Fingerprint: \${job.id.toUpperCase()}</p>
+    </div>
+    
+    <div style="text-align: right;">
+      <div class="stamp">\${analysis.trustLevel.toUpperCase()} PASS</div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    }
+  <\/script>
+</body>
+</html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(reportHtml);
+    printWindow.document.close();
+  };
+
   if (loading || isStillProcessing) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[70vh] flex flex-col items-center justify-center space-y-8">
@@ -745,6 +1271,7 @@ const JobResults = () => {
           
           <button 
             type="button"
+            onClick={handleExportReport}
             className="flex-grow sm:flex-grow-0 px-6 py-2.5 bg-white text-[#030303] rounded-full flex items-center justify-center gap-2 text-xs font-bold shadow-[0_4px_12px_rgba(255,255,255,0.15)] hover:bg-zinc-200 transition-all hover:scale-[1.01] active:scale-[0.99]"
           >
             <Printer className="w-3.5 h-3.5" />

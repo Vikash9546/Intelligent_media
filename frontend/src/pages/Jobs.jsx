@@ -48,6 +48,30 @@ const Jobs = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    if (jobs.length === 0) return;
+    const headers = ["Job ID", "Original Filename", "Mime Type", "Status", "Megapixel Rating", "File Size (Bytes)", "Created At"];
+    const rows = jobs.map(job => [
+      job.id,
+      `"${job.originalFilename.replace(/"/g, '""')}"`,
+      job.mimeType,
+      job.status,
+      job.qualityScore || 0,
+      job.fileSizeBytes,
+      new Date(job.createdAt).toISOString()
+    ]);
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `mediapipe_pipeline_jobs_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     fetchJobs();
   }, [page, statusFilter]);
@@ -89,6 +113,7 @@ const Jobs = () => {
         <div className="flex gap-3">
           <button 
             type="button"
+            onClick={handleExportCSV}
             className="px-4 py-2 border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04] rounded-full flex items-center gap-2 text-xs font-bold text-zinc-300 hover:text-white transition-all"
           >
             <Download className="w-3.5 h-3.5" />

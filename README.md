@@ -255,6 +255,28 @@ No single heuristic is reliable alone. EXIF Software tags can be stripped by edi
 
 ---
 
+## Crucial Architectural Assumptions Made
+
+To deliver a system optimized for **real-world, messy field uploads** rather than generic metric baselines, the following assumptions were made:
+
+1. **Non-Punitive EXIF Metadata Headers**:
+   * *Assumption*: Platform-processed uploads (WhatsApp, CDN compressions, browser downloads) frequently strip EXIF headers.
+   * *Design choice*: Treated missing EXIF as neutral evidence rather than absolute proof of tampering. The authenticity score depends strictly on screenshot heuristics, edge anomalies, and software signature parsing, protecting compression-optimized images.
+
+2. **Positional Character Misread Swaps**:
+   * *Assumption*: Standard characters on Indian vehicle plates commonly result in consistent OCR swaps (`O` ➔ `0`, `I` ➔ `1`) depending strictly on their position in the sequence.
+   * *Design choice*: Implemented layout-aware position correction blocks before evaluating regex patterns, securing extremely high recall for visually clear but character-confused plates.
+
+3. **Visual Quality vs. Regex Accuracy Isolation**:
+   * *Assumption*: Visually perfect plates might contain dirt or perspective angles that result in incomplete regex string extraction (e.g., 9 digits instead of 10).
+   * *Design choice*: Separated *OCR Reliability* from *Visual Quality* and *Human Auditing Usability*. Partial registration strings are labeled `mostly_readable` or `extraction_uncertain` with a recommendation of `manual_review_recommended` instead of failing the verification score.
+
+4. **Horizontal Geometry Aspect Ratio Filtering**:
+   * *Assumption*: License plates have distinct horizontal rectangular shapes that can be localized without heavy machine learning.
+   * *Design choice*: Scanning focused on regions with horizontal aspect ratios strictly between **2.5 and 6.5** within bottom-center coordinates, minimizing processing overhead while eliminating noisy background interference.
+
+---
+
 ## Running Locally
 
 ### Prerequisites
@@ -320,52 +342,143 @@ chmod +x test.sh
 
 ---
 
-### Sample curl Commands
+## Sample API Requests & Responses
 
-**Upload an image:**
-```bash
-curl -X POST http://localhost:3000/api/v1/upload \
-  -F "image=@/path/to/photo.jpg"
-```
+### 1. Upload Vehicle Image
+* **Request**:
+  `POST /api/v1/upload` (Form-Data)
+  * Header: `Content-Type: multipart/form-data`
+  * Body Param: `image` (binary file buffer, max 10MB)
+* **Sample curl**:
+  ```bash
+  curl -X POST http://localhost:3000/api/v1/upload \
+    -F "image=@/path/to/vehicle.jpg"
+  ```
+* **Response (`202 Accepted`)**:
+  ```json
+  {
+    "jobId": "87c4f4a3-7649-410a-b328-98e90ffba1cd",
+    "status": "pending",
+    "message": "Image accepted and queued for analysis."
+  }
+  ```
+* **Error Response (`415 Unsupported Media Type` for non-images)**:
+  ```json
+  {
+    "error": "Unsupported Media Type",
+    "message": "Invalid file signature. Only JPEG, PNG, and WEBP image uploads are supported.",
+    "statusCode": 415
+  }
+  ```
 
-**Check job status:**
-```bash
-curl http://localhost:3000/api/v1/jobs/{jobId}/status
-```
+### 2. Check Job Status
+* **Request**:
+  `GET /api/v1/jobs/:jobId/status`
+* **Sample curl**:
+  ```bash
+  curl http://localhost:3000/api/v1/jobs/87c4f4a3-7649-410a-b328-98e90ffba1cd/status
+  ```
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "id": "87c4f4a3-7649-410a-b328-98e90ffba1cd",
+    "status": "completed",
+    "processedAt": "2026-05-17T10:06:12.454Z"
+  }
+  ```
 
-**Get analysis results:**
-```bash
-curl http://localhost:3000/api/v1/jobs/{jobId}/results
-```
+### 3. Retrieve Trust Results
+* **Request**:
+  `GET /api/v1/jobs/:jobId/results`
+* **Sample curl**:
+  ```bash
+  curl http://localhost:3000/api/v1/jobs/87c4f4a3-7649-410a-b328-98e90ffba1cd/results
+  ```
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "id": "87c4f4a3-7649-410a-b328-98e90ffba1cd",
+    "originalFilename": "vehicle.jpg",
+    "qualityScore": 94,
+    "status": "completed",
+    "results": {
+      "blur_detection": { "passed": true, "details": { "variance": 145.2, "isBlurry": false } },
+      "exposure_analysis": { "passed": true, "details": { "meanLuminance": 112.4, "isOverexposed": false, "isUnderexposed": false } },
+      "duplicate_detection": { "passed": true, "details": { "isDuplicate": false, "matchCount": 0 } },
+      "screenshot_detection": { "passed": true, "details": { "score": 0, "isScreenshot": false } },
+      "tampering_detection": { "passed": true, "details": { "hasTamperingSignatures": false } },
+      "ocr_plate_detection": {
+        "passed": true,
+        "confidence": 0.94,
+        "details": {
+          "detectedPlates": ["RJ19UC7034"],
+          "partialMatches": ["RJ19UC7034"],
+          "bestOcrConfidence": 0.96,
+          "perceptualLabels": {
+            "readability": "clearly_readable",
+            "extractionQuality": "High",
+            "humanPerceptionScore": 0.95
+          }
+        }
+      }
+    },
+    "trustAssessment": {
+      "trustScore": 95,
+      "trustLevel": "Highly Trusted",
+      "recommendation": "Verification Approved",
+      "summary": ["High focus quality", "Authentic mobile capture"],
+      "uncertaintyFlags": [],
+      "isAuthentic": true,
+      "dimensions": {
+        "visualQuality": 96,
+        "ocrReliability": 94,
+        "authenticityConfidence": 95,
+        "workflowIntegrity": 100,
+        "operationalUsability": 96
+      }
+    }
+  }
+  ```
+* **Error Response (`409 Conflict` before completion)**:
+  ```json
+  {
+    "error": "Conflict",
+    "message": "Job analysis is still in progress. Please check back later.",
+    "statusCode": 409
+  }
+  ```
 
-**Get failure details:**
-```bash
-curl http://localhost:3000/api/v1/jobs/{jobId}/failure
-```
+### 4. Retrieve Failure Details
+* **Request**:
+  `GET /api/v1/jobs/:jobId/failure`
+* **Sample curl**:
+  ```bash
+  curl http://localhost:3000/api/v1/jobs/87c4f4a3-7649-410a-b328-98e90ffba1cd/failure
+  ```
+* **Response (`200 OK` for failed job)**:
+  ```json
+  {
+    "id": "87c4f4a3-7649-410a-b328-98e90ffba1cd",
+    "failedAt": "2026-05-17T10:06:14.124Z",
+    "errorType": "FATAL_ANALYSIS_ERROR",
+    "message": "Image dimension check failed: Uploaded image exceeds supported 4:3 or 16:9 operational aspect parameters."
+  }
+  ```
 
-**List recent completed jobs:**
-```bash
-curl "http://localhost:3000/api/v1/jobs?page=1&limit=10&status=completed"
-```
-
-**Health check:**
-```bash
-curl http://localhost:3000/health
-```
-
-**Upload a non-image (should fail with 415):**
-```bash
-curl -X POST http://localhost:3000/api/v1/upload \
-  -F "image=@/etc/hosts;type=text/plain"
-```
-
-**Request results before job completes (should return 409):**
-```bash
-# Upload then immediately request results
-JOB_ID=$(curl -s -X POST http://localhost:3000/api/v1/upload \
-  -F "image=@photo.jpg" | jq -r '.jobId')
-curl http://localhost:3000/api/v1/jobs/$JOB_ID/results
-```
+### 5. Health Check
+* **Request**:
+  `GET /health`
+* **Sample curl**:
+  ```bash
+  curl http://localhost:3000/health
+  ```
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "status": "ok",
+    "timestamp": "2026-05-17T10:06:15.824Z"
+  }
+  ```
 
 ---
 

@@ -275,70 +275,43 @@ To deliver a system optimized for **real-world, messy field uploads** rather tha
    * *Assumption*: License plates have distinct horizontal rectangular shapes that can be localized without heavy machine learning.
    * *Design choice*: Scanning focused on regions with horizontal aspect ratios strictly between **2.5 and 6.5** within bottom-center coordinates, minimizing processing overhead while eliminating noisy background interference.
 
----
+----
 
-## Running Locally
+## Docker Setup
 
-### Prerequisites
-- Node.js 20+
-- PostgreSQL 14+ running locally
-- Redis 7+ running locally
-- `jq` (for test script)
+Follow these simple steps to download, install, and run the entire application stack:
 
-### Step 1: Clone and Install
+### Step 1: Download & Install Docker
+Make sure Docker Desktop is installed and running on your system:
+* **[Download Docker Desktop](https://www.docker.com/products/docker-desktop/)**
 
+### Step 2: Clone the Repository
+Clone the project repository to your local machine:
 ```bash
 git clone https://github.com/Vikash9546/Intelligent_media.git
+```
+
+### Step 3: Change to the Root Directory
+Navigate into the root directory of the cloned project:
+```bash
 cd Intelligent_media
-npm install
 ```
 
-### Step 2: Configure Environment
-
+### Step 4: Run the Application Stack
+Build and spin up the complete local full-stack environment (Frontend, API Server, Worker, PostgreSQL, and Redis):
 ```bash
-cp .env.example .env
-# Edit .env with your PostgreSQL and Redis credentials
+docker compose up --build
 ```
 
-### Step 3: Create the Database
+---
 
-```bash
-psql -U postgres -c "CREATE DATABASE media_pipeline;"
-```
+### Localhost Access URLs
 
-### Step 4: Run Migrations
+Once all containers are successfully started, you can access the application at the following local URLs:
 
-```bash
-npm run migrate
-```
-
-### Step 5: Start Redis
-
-```bash
-redis-server
-# or: brew services start redis
-```
-
-### Step 6: Start the API Server
-
-```bash
-npm run dev
-# Server starts at http://localhost:3000
-# Bull Board dashboard at http://localhost:3000/admin/queues
-```
-
-### Step 7: Start the Worker (separate terminal)
-
-```bash
-npm run dev:worker
-```
-
-### Step 8: Run the Test Suite
-
-```bash
-chmod +x test.sh
-./test.sh
-```
+* **Frontend Dashboard (Web App UI):** [http://localhost:5173](http://localhost:5173)
+* **API Server Health Endpoint:** [http://localhost:3000/health](http://localhost:3000/health)
+* **BullMQ Admin Dashboard:** [http://localhost:3000/admin/queues](http://localhost:3000/admin/queues)
 
 ---
 
@@ -479,44 +452,6 @@ chmod +x test.sh
     "timestamp": "2026-05-17T10:06:15.824Z"
   }
   ```
-
----
-
-## Docker Setup
-
-Follow these simple steps to download, install, and run the entire application stack:
-
-### Step 1: Download & Install Docker
-Make sure Docker Desktop is installed and running on your system:
-* **[Download Docker Desktop](https://www.docker.com/products/docker-desktop/)**
-
-### Step 2: Clone the Repository
-Clone the project repository to your local machine:
-```bash
-git clone https://github.com/Vikash9546/Intelligent_media.git
-```
-
-### Step 3: Change to the Root Directory
-Navigate into the root directory of the cloned project:
-```bash
-cd Intelligent_media
-```
-
-### Step 4: Run the Application Stack
-Build and spin up the complete local full-stack environment (Frontend, API Server, Worker, PostgreSQL, and Redis):
-```bash
-docker compose up --build
-```
-
----
-
-### Localhost Access URLs
-
-Once all containers are successfully started, you can access the application at the following local URLs:
-
-* **Frontend Dashboard (Web App UI):** [http://localhost:5173](http://localhost:5173)
-* **API Server Health Endpoint:** [http://localhost:3000/health](http://localhost:3000/health)
-* **BullMQ Admin Dashboard:** [http://localhost:3000/admin/queues](http://localhost:3000/admin/queues)
 
 ---
 

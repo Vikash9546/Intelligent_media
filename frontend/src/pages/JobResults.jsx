@@ -9,30 +9,55 @@ import {
   renderResolution,
   SeverityBadge
 } from "../utils/renderHelpers";
-const TrustDimensionBar = ({ label, value, color }) => <div className="space-y-1">
+import {
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Fingerprint,
+  MapPin,
+  Camera,
+  Palette,
+  Calendar,
+  Layers,
+  Printer,
+  ArrowLeft,
+  Terminal,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Scan,
+  Info,
+  ExternalLink,
+  ShieldCheck,
+  ShieldAlert,
+  Zap
+} from "lucide-react";
+
+const TrustDimensionBar = ({ label, value, color }) => (
+  <div className="space-y-1">
     <div className="flex justify-between items-end">
-      <span className="text-[10px] font-bold text-outline uppercase tracking-wider">{label}</span>
-      <span className="text-label-sm font-code-sm text-primary">{Math.round(value)}%</span>
+      <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">{label}</span>
+      <span className="text-xs font-bold font-code-sm text-zinc-200">{Math.round(value)}%</span>
     </div>
-    <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
+    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/[0.02]">
       <div
-  className={`h-full transition-all duration-700 ease-out ${color}`}
-  style={{ width: `${value}%` }}
-/>
+        className={`h-full transition-all duration-1000 ease-out rounded-full ${color}`}
+        style={{ width: `${value}%` }}
+      />
     </div>
-  </div>;
+  </div>
+);
+
 const getReadableOcrLabel = (readability, confidence, plates) => {
   const conf = confidence ?? 0;
-  if (plates.length > 0 && conf > 0.7)
-    return "Clearly Readable";
-  if (plates.length > 0)
-    return "Mostly Readable";
-  if (readability === "partially_readable")
-    return "Partial Extraction";
-  if (readability === "low_confidence_extraction")
-    return "Extraction Uncertain";
+  if (plates.length > 0 && conf > 0.7) return "Clearly Readable";
+  if (plates.length > 0) return "Mostly Readable";
+  if (readability === "partially_readable") return "Partial Extraction";
+  if (readability === "low_confidence_extraction") return "Extraction Uncertain";
   return "Unreadable";
 };
+
 const JobResults = () => {
   const { id } = useParams();
   const [job, setJob] = useState(null);
@@ -40,529 +65,696 @@ const JobResults = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   useEffect(() => {
+    let timerId;
+    let isActive = true;
+
     const fetchJobData = async () => {
       try {
-        const [jobRes, resultsRes] = await Promise.all([
-          axios.get(`/api/v1/jobs/${id}/status`),
-          axios.get(`/api/v1/jobs/${id}/results`)
-        ]);
-        setJob(jobRes.data.job);
-        setAnalysis(normalizeAnalysisResponse(resultsRes.data));
+        const jobRes = await axios.get(`/api/v1/jobs/${id}/status`);
+        if (!isActive) return;
+
+        const currentJob = jobRes.data.job;
+        setJob(currentJob);
+
+        if (currentJob.status === "completed") {
+          const resultsRes = await axios.get(`/api/v1/jobs/${id}/results`);
+          if (!isActive) return;
+          setAnalysis(normalizeAnalysisResponse(resultsRes.data));
+          setLoading(false);
+          setError(null);
+        } else if (currentJob.status === "failed") {
+          setError(currentJob.errorMessage || "Pipeline processing failed.");
+          setLoading(false);
+        } else {
+          // Still processing/queued: Poll in 2 seconds
+          timerId = setTimeout(fetchJobData, 2000);
+        }
       } catch (err) {
         console.error(err);
+        if (!isActive) return;
+        
         if (err.response?.status === 409) {
-          setError("Verification in progress. The trust engine is finalizing operational outcomes.");
+          timerId = setTimeout(fetchJobData, 2000);
         } else {
           setError(err.response?.data?.message || "Failed to fetch verification data");
+          setLoading(false);
         }
-      } finally {
-        setLoading(false);
       }
     };
-    if (id) fetchJobData();
+
+    if (id) {
+      fetchJobData();
+    }
+
+    return () => {
+      isActive = false;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [id]);
-  if (loading) {
-    return <div className="p-xl text-center space-y-md">
-        <div className="animate-spin text-secondary inline-block">
-          <span className="material-symbols-outlined text-4xl">settings_input_antenna</span>
+
+  const isStillProcessing = job && (job.status === "processing" || job.status === "queued");
+
+  if (loading || isStillProcessing) {
+    return (
+      <div className="max-w-[1400px] mx-auto min-h-[70vh] flex flex-col items-center justify-center space-y-8">
+        <div className="relative w-24 h-24">
+          <div className="absolute inset-0 rounded-full border-2 border-purple-500/10 border-t-purple-500 animate-spin" style={{ animationDuration: '1.2s' }} />
+          <div className="absolute inset-2 rounded-full border-2 border-indigo-500/10 border-b-indigo-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }} />
+          <div className="absolute inset-6 bg-purple-500/10 rounded-full border border-purple-500/20 flex items-center justify-center animate-pulse">
+            <Zap className="w-5 h-5 text-purple-400" />
+          </div>
         </div>
-        <p className="font-headline-md text-primary tracking-tight">Synchronizing Trust Signals...</p>
-      </div>;
+        
+        <div className="text-center space-y-3 max-w-md">
+          <div className="flex items-center justify-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-widest animate-pulse">
+            <Sparkles className="w-3.5 h-3.5" />
+            Neural Analysis Active
+          </div>
+          <h2 className="font-semibold text-xl text-white tracking-tight">
+            Ingestion & Scoring in Progress...
+          </h2>
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            Running 7 parallel AI checks: Laplacian blur coherence, perceptual copy fingerprinting, and standard Indian plate OCR alignment.
+          </p>
+          
+          {job && (
+            <div className="pt-4 flex flex-col items-center gap-2">
+              <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-code-sm text-zinc-400">
+                Job ID: #{job.id.substring(0, 12).toUpperCase()}
+              </span>
+              <span className="text-[10px] text-zinc-400 font-semibold truncate max-w-[280px]">
+                Processing: "{job.originalFilename}"
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
-  if (error || !job || !analysis) {
-    return <div className="p-xl text-center">
-        <p className="font-headline-md text-error mb-md">{error || "Verification data unavailable"}</p>
-        <Link to="/jobs" className="text-primary hover:underline">Return to dashboard</Link>
-      </div>;
+
+  if (error || !job || (job && job.status === "failed") || !analysis) {
+    return (
+      <div className="max-w-[800px] mx-auto min-h-[50vh] flex flex-col items-center justify-center p-8 text-center space-y-6">
+        <div className="p-6 bg-red-500/5 border border-red-500/10 rounded-2xl text-red-400 max-w-md">
+          <ShieldAlert className="w-12 h-12 mx-auto mb-3" />
+          <h3 className="font-semibold text-lg text-white">System Synchronizer Halted</h3>
+          <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+            {error || "Verification data is currently unavailable for this record."}
+          </p>
+        </div>
+        <Link 
+          to="/jobs" 
+          className="px-6 py-2.5 bg-white text-[#030303] rounded-full text-xs font-bold shadow-[0_4px_12px_rgba(255,255,255,0.15)] hover:bg-zinc-200 transition-all"
+        >
+          Return to Dashboard
+        </Link>
+      </div>
+    );
   }
-  const getStatusColor = (status) => {
+
+  const getStatusStyle = (status) => {
     switch (status) {
       case "completed":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+        return "bg-emerald-500/5 text-emerald-400 border-emerald-500/10";
       case "failed":
-        return "bg-red-100 text-red-700 border-red-200";
+        return "bg-red-500/5 text-red-400 border-red-500/10";
       case "processing":
-        return "bg-amber-100 text-amber-700 border-amber-200";
+        return "bg-purple-500/5 text-purple-400 border-purple-500/10 animate-pulse";
       default:
-        return "bg-surface-container text-outline border-outline-variant";
+        return "bg-white/5 text-zinc-400 border-white/10";
     }
   };
+
   const getRecommendationStyle = (severity) => {
     switch (severity) {
       case "success":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+        return "border-emerald-500/20 bg-emerald-500/[0.02] shadow-[0_0_50px_-10px_rgba(16,185,129,0.05)]";
       case "warning":
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return "border-amber-500/20 bg-amber-500/[0.02] shadow-[0_0_50px_-10px_rgba(245,158,11,0.05)]";
       case "error":
-        return "bg-red-50 text-red-700 border-red-200";
+        return "border-red-500/20 bg-red-500/[0.02] shadow-[0_0_50px_-10px_rgba(239,68,68,0.05)]";
       default:
-        return "bg-surface-container-low text-outline border-outline-variant";
+        return "border-white/5 bg-white/[0.01]";
     }
   };
-  return <div className="max-w-[1400px] mx-auto pb-2xl">
-      {
-    /* Operational Header */
-  }
-      <section className="mb-xl grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
-        <div className="lg:col-span-7 space-y-base">
-          <div className="flex items-center gap-sm">
-            <span className="px-sm py-xs bg-surface-container-highest text-primary rounded font-code-sm text-code-sm border border-outline-variant">
+
+  const getSeverityIcon = (severity) => {
+    switch (severity) {
+      case "success":
+        return <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />;
+      case "warning":
+        return <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />;
+      case "error":
+        return <XCircle className="w-5 h-5 text-red-400 shrink-0" />;
+      default:
+        return <Info className="w-5 h-5 text-zinc-400 shrink-0" />;
+    }
+  };
+
+  return (
+    <div className="max-w-[1400px] mx-auto space-y-8">
+      
+      {/* Back link */}
+      <div>
+        <Link 
+          to="/jobs" 
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Archives
+        </Link>
+      </div>
+
+      {/* Operational Header */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Side: Overview & Recommendation Banner */}
+        <div className="lg:col-span-7 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full font-code-sm text-[10px] text-zinc-300">
               VER-{id?.substring(0, 8).toUpperCase()}
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${getStatusColor(job.status)}`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${getStatusStyle(job.status)}`}>
               {job.status}
             </span>
-            <SeverityBadge severity={analysis.recommendation.severity}>
+            
+            {/* Trust level badge */}
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[9px] font-bold uppercase tracking-wider">
+              <Sparkles className="w-2.5 h-2.5 animate-pulse" />
               {analysis.trustLevel}
-            </SeverityBadge>
+            </div>
           </div>
-          <h1 className="font-headline-xl text-headline-xl text-primary leading-tight">{job.originalFilename ?? "Verification Report"}</h1>
           
-          <div className={`p-lg rounded-xl border ${getRecommendationStyle(analysis.recommendation.severity)} space-y-sm shadow-sm`}>
-            <div className="flex items-center gap-md">
-              <span className="material-symbols-outlined text-2xl">
-                {analysis.recommendation.severity === "success" ? "verified" : analysis.recommendation.severity === "warning" ? "report_problem" : "cancel"}
-              </span>
+          <h1 className="font-semibold text-3xl tracking-tight text-white leading-tight">
+            {job.originalFilename ?? "Verification Report"}
+          </h1>
+          
+          {/* Executive Recommendation Banner styled like ultra-premium floating glass */}
+          <div className={`p-6 rounded-2xl border ${getRecommendationStyle(analysis.recommendation.severity)} space-y-4`}>
+            <div className="flex items-start gap-4">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl mt-0.5">
+                {getSeverityIcon(analysis.recommendation.severity)}
+              </div>
               <div>
-                <h2 className="font-headline-md leading-none">{analysis.recommendation.label}</h2>
-                <p className="text-body-md opacity-80 mt-1">{analysis.recommendation.desc}</p>
+                <h2 className="font-semibold text-base text-white">{analysis.recommendation.label}</h2>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{analysis.recommendation.desc}</p>
               </div>
             </div>
-            {analysis.recommendation.summary.length > 0 && <ul className="mt-md space-y-xs pl-8 list-disc text-body-md opacity-90 border-t border-current/10 pt-sm">
-                {analysis.recommendation.summary.map((s, i) => <li key={i}>{s}</li>)}
-              </ul>}
+            
+            {analysis.recommendation.summary.length > 0 && (
+              <ul className="mt-4 space-y-2 pl-12 list-disc text-xs text-zinc-300 border-t border-white/[0.04] pt-4 leading-relaxed">
+                {analysis.recommendation.summary.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
-        <div className="lg:col-span-5 flex flex-col gap-md">
-          <div className="bg-surface-container-lowest p-lg rounded-xl border border-outline-variant shadow-sm space-y-lg">
-            <div className="flex items-center gap-xl">
-              <div className="relative w-20 h-20">
+        {/* Right Side: Score & Trust Dimensions */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
+          <div className="glass-card p-6 rounded-2xl border border-white/[0.04] space-y-6">
+            
+            {/* Score Ring Section */}
+            <div className="flex items-center gap-6">
+              <div className="relative w-20 h-20 shrink-0">
                 <svg className="w-full h-full transform -rotate-90">
-                  <circle className="text-surface-container-highest" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" strokeWidth="8" />
+                  <circle className="text-white/5" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" strokeWidth="6" />
                   <circle
-    className={`transition-all duration-1000 ease-out ${analysis.recommendation.severity === "success" ? "text-secondary" : "text-primary"}`}
-    cx="40"
-    cy="40"
-    fill="transparent"
-    r="34"
-    stroke="currentColor"
-    strokeDasharray="213.6"
-    strokeDashoffset={213.6 - analysis.trustScore / 100 * 213.6}
-    strokeWidth="8"
-  />
+                    className={`transition-all duration-1000 ease-out ${
+                      analysis.recommendation.severity === "success" ? "text-purple-500" : "text-purple-400"
+                    }`}
+                    cx="40"
+                    cy="40"
+                    fill="transparent"
+                    r="34"
+                    stroke="currentColor"
+                    strokeDasharray="213.6"
+                    strokeDashoffset={213.6 - (analysis.trustScore / 100) * 213.6}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="font-headline-md text-primary leading-none">{analysis.isReady ? analysis.trustScore : "\u2014"}</span>
-                  <span className="text-[8px] font-bold text-outline uppercase">Trust</span>
+                  <span className="text-lg font-extrabold font-code-sm text-white leading-none">
+                    {analysis.isReady ? Math.round(analysis.trustScore) : "—"}
+                  </span>
+                  <span className="text-[7px] font-bold text-zinc-500 uppercase mt-0.5">Trust</span>
                 </div>
               </div>
-              <div className="flex-1">
-                <p className="font-label-md text-outline uppercase tracking-widest text-[10px]">Operational Health</p>
-                <p className="font-headline-md text-primary">{analysis.isReady ? analysis.trustLevel : "Analyzing..."}</p>
-                <div className="h-1.5 w-full bg-surface-container-high rounded-full mt-2 overflow-hidden">
-                  <div className={`h-full bg-secondary transition-all duration-1000`} style={{ width: `${analysis.trustScore}%` }} />
+              
+              <div className="flex-grow">
+                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none">Trust Engine Score</p>
+                <h4 className="font-semibold text-lg text-white mt-1.5 leading-none">
+                  {analysis.isReady ? analysis.trustLevel : "Processing..."}
+                </h4>
+                <div className="mt-3.5 w-full bg-white/5 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full progress-gradient transition-all duration-1000" 
+                    style={{ width: `${analysis.trustScore}%` }} 
+                  />
                 </div>
               </div>
             </div>
 
-            {analysis.dimensions && <div className="grid grid-cols-2 gap-x-gutter gap-y-md border-t border-outline-variant pt-md">
-                <TrustDimensionBar label="Visual Quality" value={analysis.dimensions.visualQuality} color="bg-secondary" />
-                <TrustDimensionBar label="Authenticity" value={analysis.dimensions.authenticityConfidence} color="bg-primary" />
-                <TrustDimensionBar label="OCR Reliability" value={analysis.dimensions.ocrReliability} color="bg-secondary" />
-                <TrustDimensionBar label="Workflow Integrity" value={analysis.dimensions.workflowIntegrity} color="bg-primary" />
-                <div className="col-span-2 pt-xs">
-                  <TrustDimensionBar label="Human-Centric Usability" value={analysis.dimensions.operationalUsability} color="bg-secondary opacity-80" />
+            {/* Dimensional Bars */}
+            {analysis.dimensions && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-white/[0.04] pt-5">
+                <TrustDimensionBar label="Visual Quality" value={analysis.dimensions.visualQuality} color="progress-gradient" />
+                <TrustDimensionBar label="Authenticity" value={analysis.dimensions.authenticityConfidence} color="bg-white" />
+                <TrustDimensionBar label="OCR Reliability" value={analysis.dimensions.ocrReliability} color="progress-gradient" />
+                <TrustDimensionBar label="Workflow Integrity" value={analysis.dimensions.workflowIntegrity} color="bg-white" />
+                
+                <div className="col-span-2 pt-1 border-t border-white/[0.02]">
+                  <TrustDimensionBar label="Human Usability" value={analysis.dimensions.operationalUsability} color="progress-gradient opacity-80" />
                 </div>
-              </div>}
+              </div>
+            )}
+            
           </div>
+          
+          {/* Diagnostic Button */}
           <div className="flex justify-end">
             <button
-    onClick={() => setShowDiagnostics(!showDiagnostics)}
-    className={`flex items-center gap-xs px-md py-xs rounded-full text-label-md font-bold transition-colors ${showDiagnostics ? "bg-secondary text-on-secondary" : "bg-surface-container-high text-primary hover:bg-surface-container-highest"}`}
-  >
-              <span className="material-symbols-outlined text-[18px]">{showDiagnostics ? "visibility_off" : "terminal"}</span>
-              {showDiagnostics ? "Hide Raw Metrics" : "Show Diagnostic Data"}
+              onClick={() => setShowDiagnostics(!showDiagnostics)}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${
+                showDiagnostics 
+                  ? "bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.3)]" 
+                  : "bg-white/5 text-zinc-400 hover:text-white border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              {showDiagnostics ? <EyeOff className="w-3.5 h-3.5" /> : <Terminal className="w-3.5 h-3.5" />}
+              {showDiagnostics ? "Hide Diagnostics" : "Diagnostic Console"}
             </button>
           </div>
+          
         </div>
       </section>
 
-      {
-    /* Verification Matrix */
-  }
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+      {/* Verification Matrix Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {
-    /* Clarity & Readability Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className={`material-symbols-outlined ${analysis.blur.color}`}>
-                {analysis.blur.icon}
-              </span>
-              <h3 className="font-headline-md text-headline-md">Clarity</h3>
+        {/* Card 1: Clarity */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <Maximize2 className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Clarity</h3>
             </div>
-            <SeverityBadge severity={analysis.blur.severity}>
+            
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+              analysis.blur.severity === "success" 
+                ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                : "bg-amber-500/5 text-amber-400 border-amber-500/10"
+            }`}>
               {analysis.blur.label}
-            </SeverityBadge>
+            </span>
           </div>
           
-          <div className="flex-1 space-y-md">
-            <p className="text-body-md text-on-surface-variant">
+          <div className="flex-grow space-y-4">
+            <p className="text-xs text-zinc-400 leading-relaxed">
               {analysis.blur.desc}
             </p>
             
-            <div className="grid grid-cols-2 gap-md p-md bg-surface-container-low rounded-lg border border-outline-variant">
-              <div className="space-y-xs">
-                <p className="text-[10px] text-outline uppercase font-bold tracking-widest">Edge Quality</p>
-                <p className="text-label-md font-bold text-primary">
+            <div className="grid grid-cols-2 gap-4 p-4 bg-white/[0.01] rounded-xl border border-white/[0.04]">
+              <div>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Edge Quality</p>
+                <p className="text-xs font-bold text-white mt-1">
                   {renderLabel(analysis.blur.details?.perceptualLabels?.edgeEnergy)}
                 </p>
               </div>
-              <div className="space-y-xs">
-                <p className="text-[10px] text-outline uppercase font-bold tracking-widest">Motion Risk</p>
-                <p className={`text-label-md font-bold ${analysis.blur.details?.motionBlurDetected ? "text-error" : "text-primary"}`}>
+              <div>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Motion Risk</p>
+                <p className={`text-xs font-bold mt-1 ${analysis.blur.details?.motionRisk === "high" ? "text-red-400" : "text-white"}`}>
                   {renderLabel(analysis.blur.details?.perceptualLabels?.motionRisk)}
                 </p>
               </div>
             </div>
 
-            {showDiagnostics && analysis.blur.details && <div className="text-[10px] font-code-sm text-outline opacity-70 animate-in fade-in">
-                <p>Laplacian: {renderMetric(analysis.blur.details.laplacianVariance, 1)}</p>
+            {showDiagnostics && analysis.blur.details && (
+              <div className="text-[10px] font-code-sm text-zinc-500 bg-black/30 p-3 rounded-lg border border-white/[0.02] space-y-0.5 animate-in fade-in duration-300">
+                <p>LaplacianVar: {renderMetric(analysis.blur.details.laplacianVariance, 1)}</p>
                 <p>Coherence: {renderMetric(analysis.blur.details.directionalCoherence, 3)}</p>
                 <p>Confidence: {renderConfidence(analysis.blur.confidence)}</p>
-              </div>}
+              </div>
+            )}
           </div>
         </div>
 
-        {
-    /* Identity Plate Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">spellcheck</span>
-              <h3 className="font-headline-md text-headline-md">Identity Extraction</h3>
+        {/* Card 2: Identity Extraction */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <Scan className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Identity Extract</h3>
             </div>
-            <SeverityBadge severity={analysis.ocr.readabilityLevel === "high" ? "success" : analysis.ocr.readabilityLevel === "unreadable" ? "error" : "warning"}>
-              {getReadableOcrLabel(
-    analysis.ocr.readability,
-    analysis.ocr.confidence,
-    analysis.ocr.plates
-  )}
-            </SeverityBadge>
+            
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+              analysis.ocr.readabilityLevel === "high"
+                ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                : "bg-amber-500/5 text-amber-400 border-amber-500/10"
+            }`}>
+              {getReadableOcrLabel(analysis.ocr.readability, analysis.ocr.confidence, analysis.ocr.plates)}
+            </span>
           </div>
           
-          <div className="flex-1 space-y-md">
-            <div className="flex flex-wrap gap-sm min-h-[40px] items-center">
-              {analysis.ocr.plates.length > 0 ? analysis.ocr.plates.map((plate, i) => <span key={i} className="px-md py-1.5 bg-secondary text-on-secondary rounded font-bold text-headline-sm tracking-widest border border-secondary shadow-sm">
-                  {plate}
-                </span>) : <p className="text-body-md text-outline italic">No standard registration formats identified.</p>}
+          <div className="flex-grow space-y-4">
+            <div className="flex flex-wrap gap-2 min-h-[44px] items-center">
+              {analysis.ocr.plates.length > 0 ? (
+                analysis.ocr.plates.map((plate, i) => (
+                  <span key={i} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-lg font-bold text-sm tracking-widest shadow-md">
+                    {plate}
+                  </span>
+                ))
+              ) : (
+                <p className="text-xs text-zinc-500 italic">No standard plate geometry extracted.</p>
+              )}
             </div>
 
-            <div className="p-sm bg-surface-container-low border border-outline-variant rounded-lg font-code-sm text-primary text-[11px] h-[80px] overflow-y-auto flex items-center">
-              <span className="opacity-80 leading-relaxed font-bold">
-                {analysis.ocr.plates.length > 0 ? analysis.ocr.plates.join(", ") : "Automated extraction uncertain."}
+            <div className="p-3 bg-white/[0.01] border border-white/[0.04] rounded-xl text-xs text-zinc-300 h-20 overflow-y-auto leading-relaxed">
+              <strong>Raw Corpus Text:</strong>{" "}
+              <span className="text-zinc-400">
+                {analysis.ocr.text ? `"${analysis.ocr.text}"` : "OCR parsing concluded empty."}
               </span>
             </div>
 
-            {showDiagnostics && <div className="text-[10px] font-code-sm text-outline opacity-70 animate-in fade-in space-y-1 mt-sm pt-xs border-t border-outline-variant/30">
+            {showDiagnostics && (
+              <div className="text-[10px] font-code-sm text-zinc-500 bg-black/30 p-3 rounded-lg border border-white/[0.02] space-y-0.5 animate-in fade-in duration-300">
                 <p>Engine Confidence: {renderConfidence(analysis.ocr.confidence)}</p>
-                <p>Format Valid: {analysis.ocr.plates.length > 0 ? "TRUE" : "FALSE"}</p>
-                {analysis.ocr.text && <p className="mt-1 truncate">Raw OCR: "{analysis.ocr.text}"</p>}
-              </div>}
+                <p>Format matches: {analysis.ocr.plates.length}</p>
+              </div>
+            )}
           </div>
         </div>
 
-        {
-    /* Illumination Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className={`material-symbols-outlined ${analysis.brightness.color}`}>
-                {analysis.brightness.icon}
-              </span>
-              <h3 className="font-headline-md text-headline-md">Illumination</h3>
+        {/* Card 3: Illumination */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <Palette className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Illumination</h3>
             </div>
-            <SeverityBadge severity={analysis.brightness.severity}>
+            
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+              analysis.brightness.severity === "success" 
+                ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                : "bg-amber-500/5 text-amber-400 border-amber-500/10"
+            }`}>
               {analysis.brightness.label}
-            </SeverityBadge>
+            </span>
           </div>
-          <div className="flex-1 space-y-md">
-            <p className="text-body-md text-on-surface-variant">
+          
+          <div className="flex-grow space-y-4">
+            <p className="text-xs text-zinc-400 leading-relaxed">
               {analysis.brightness.desc}
             </p>
-            <div className="p-md bg-surface-container-low rounded-lg border border-outline-variant space-y-sm">
-              <div className="flex justify-between text-label-md">
-                <span className="text-outline font-bold uppercase text-[9px] tracking-widest">Exposure Level</span>
-                <span className="text-primary font-bold">{renderLabel(analysis.brightness.details?.perceptualLabels?.exposure)}</span>
+            
+            <div className="p-4 bg-white/[0.01] border border-white/[0.04] rounded-xl space-y-2.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-500">Exposure Profile</span>
+                <span className="font-bold text-white">{renderLabel(analysis.brightness.details?.perceptualLabels?.exposure)}</span>
               </div>
-              <div className="flex justify-between text-label-md">
-                <span className="text-outline font-bold uppercase text-[9px] tracking-widest">Tonal Range</span>
-                <span className="text-primary font-bold">{renderLabel(analysis.brightness.details?.perceptualLabels?.contrast)}</span>
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-500">Tonal Range Contrast</span>
+                <span className="font-bold text-white">{renderLabel(analysis.brightness.details?.perceptualLabels?.contrast)}</span>
               </div>
-              <div className="flex justify-between text-label-md">
-                <span className="text-outline font-bold uppercase text-[9px] tracking-widest">Detail Clipping</span>
-                <span className="text-primary font-bold">{renderLabel(analysis.brightness.details?.perceptualLabels?.dynamicRange)}</span>
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-500">Clipping Level</span>
+                <span className="font-bold text-white">{renderLabel(analysis.brightness.details?.perceptualLabels?.dynamicRange)}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {
-    /* Authenticity Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">verified_user</span>
-              <h3 className="font-headline-md text-headline-md">Authenticity</h3>
+        {/* Card 4: Authenticity */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Authenticity</h3>
             </div>
-            <SeverityBadge severity={analysis.authenticity.riskLevel === "low" ? "success" : analysis.authenticity.riskLevel === "high" ? "error" : "warning"}>
+            
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+              analysis.authenticity.riskLevel === "low" 
+                ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                : "bg-red-500/5 text-red-400 border-red-500/10"
+            }`}>
               {analysis.authenticity.label}
-            </SeverityBadge>
+            </span>
           </div>
-          <div className="flex-1 space-y-md">
-            <div className="flex items-center gap-md p-md bg-surface-container-low rounded-lg border border-outline-variant">
-              <div className={`w-12 h-12 rounded flex items-center justify-center ${analysis.authenticity.riskLevel === "low" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                <span className="material-symbols-outlined">{analysis.authenticity.riskLevel === "low" ? "no_photography" : "screenshot"}</span>
+          
+          <div className="flex-grow space-y-4">
+            <div className="p-4 bg-white/[0.01] border border-white/[0.04] rounded-xl flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                analysis.authenticity.riskLevel === "low" 
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+              }`}>
+                <Camera className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-outline font-bold uppercase tracking-widest">Capture Source</p>
-                <p className="font-headline-sm text-primary leading-none mt-1">{analysis.authenticity.source}</p>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Embedded Profile</p>
+                <p className="text-xs font-bold text-white mt-0.5">{analysis.authenticity.source}</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-xs min-h-[40px]">
-              {analysis.authenticity.flags.length > 0 ? analysis.authenticity.flags.map((flag, i) => <span key={i} className="px-sm py-xs bg-error-container text-on-error-container rounded-sm text-[10px] font-bold uppercase tracking-wider">
-                  {flag}
-                </span>) : <span className="text-body-md text-on-surface-variant italic">No manipulation indicators identified.</span>}
+            
+            <div className="flex flex-wrap gap-1.5 min-h-[36px] items-center">
+              {analysis.authenticity.flags.length > 0 ? (
+                analysis.authenticity.flags.map((flag, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-red-500/15 border border-red-500/20 text-red-400 rounded text-[9px] font-bold uppercase tracking-wider">
+                    {flag}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-zinc-500 italic">No editing/tamper indicators flagged.</span>
+              )}
             </div>
           </div>
         </div>
 
-        {
-    /* Uniqueness Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">content_copy</span>
-              <h3 className="font-headline-md text-headline-md">Duplicate Risk</h3>
+        {/* Card 5: Duplicate Risk */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <Fingerprint className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Duplicate Risk</h3>
             </div>
+            
             <SeverityBadge severity={analysis.uniqueness.severity}>
               {analysis.uniqueness.label}
             </SeverityBadge>
           </div>
-          <div className="flex-1 space-y-md">
-            <div className="p-md bg-surface-container-low border border-outline-variant rounded-lg flex items-center gap-md">
-              <span className="material-symbols-outlined text-outline text-3xl">fingerprint</span>
+          
+          <div className="flex-grow space-y-4">
+            <div className="p-4 bg-white/[0.01] border border-white/[0.04] rounded-xl flex items-center gap-3">
+              <Fingerprint className="w-8 h-8 text-purple-400 shrink-0" />
               <div className="overflow-hidden">
-                <p className="text-[9px] font-bold text-outline uppercase tracking-widest">Perceptual Signature</p>
-                <p className="font-code-sm text-[10px] text-primary truncate">#{id?.substring(0, 16)}</p>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Perceptual Signature</p>
+                <p className="text-[10px] font-bold text-white truncate mt-0.5 font-code-sm">
+                  #{id?.toUpperCase()}
+                </p>
               </div>
             </div>
-            <p className="text-body-md text-on-surface-variant">
-              {analysis.uniqueness.passed === false ? "High perceptual similarity to an existing record identified. Manual verification of context recommended." : "No conflicting visual signatures identified in the current verification corpus."}
+            
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              {analysis.uniqueness.passed === false 
+                ? "Substantial perceptual signature mapping detected. This asset mirrors a record in our active database." 
+                : "No matching perceptual duplicates identified in the processed corpus."}
             </p>
           </div>
         </div>
 
-        {
-    /* Technical Specification Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">settings_overscan</span>
-              <h3 className="font-headline-md text-headline-md">Specifications</h3>
+        {/* Card 6: Specs */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col justify-between gap-5">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-300">
+                <Maximize2 className="w-4 h-4" />
+              </div>
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Specifications</h3>
             </div>
-            <SeverityBadge severity={analysis.specs.megapixels && analysis.specs.megapixels > 0.8 ? "success" : "warning"}>
+            
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+              analysis.specs.megapixels > 0.8
+                ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                : "bg-amber-500/5 text-amber-400 border-amber-500/10"
+            }`}>
               {analysis.specs.resolutionLabel}
-            </SeverityBadge>
+            </span>
           </div>
-          <div className="flex-1 space-y-md">
-            <div className="p-md bg-surface-container-low border border-outline-variant rounded-lg text-center">
-              <p className="font-headline-md text-primary">{renderResolution(analysis.specs.width, analysis.specs.height)}</p>
-              <p className="text-[10px] font-bold text-outline uppercase tracking-widest mt-1">
+          
+          <div className="flex-grow space-y-4">
+            <div className="p-4 bg-white/[0.01] border border-white/[0.04] rounded-xl text-center">
+              <p className="text-base font-extrabold text-white leading-none font-code-sm">
+                {renderResolution(analysis.specs.width, analysis.specs.height)}
+              </p>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1.5">
                 {renderMetric(analysis.specs.megapixels, 2, " Megapixels")}
               </p>
             </div>
-            <p className="text-body-md text-on-surface-variant leading-relaxed">
+            
+            <p className="text-xs text-zinc-400 leading-relaxed">
               {analysis.specs.impactDesc}
             </p>
           </div>
         </div>
 
-        {
-    /* Structured Image Metadata Card */
-  }
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-md md:col-span-2 lg:col-span-3">
-          <div className="flex justify-between items-center border-b border-outline-variant pb-sm">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-secondary">info</span>
-              <h3 className="font-headline-md text-headline-md">Structured Image Metadata</h3>
+        {/* Structured Image Metadata profiling block */}
+        <div className="glass-card p-6 rounded-2xl border border-white/[0.04] flex flex-col gap-6 md:col-span-2 lg:col-span-3">
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.04] pb-4">
+            <div className="flex items-center gap-2.5">
+              <Info className="w-5 h-5 text-purple-400" />
+              <h3 className="font-semibold text-sm text-white uppercase tracking-wider">Structured Metadata Profile</h3>
             </div>
-            <span className="px-sm py-xs bg-surface-container-high text-outline rounded text-[10px] font-bold uppercase tracking-wider">
-              {analysis.imageMetadata?.format || "METADATA"} PROFILE
+            
+            <span className="px-3 py-1 bg-white/5 border border-white/10 text-zinc-300 rounded-md text-[9px] font-bold uppercase tracking-wider">
+              {analysis.imageMetadata?.format || "EXIF"} PROFILE
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-lg pt-sm">
-            {
-    /* Column 1: Encoding & Color Space */
-  }
-            <div className="space-y-md border-r border-outline-variant/30 pr-md last:border-0 last:pr-0">
-              <h4 className="text-[11px] font-bold text-secondary uppercase tracking-widest flex items-center gap-xs">
-                <span className="material-symbols-outlined text-[14px]">palette</span>
-                Color & Format Profile
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Color & Format Panel */}
+            <div className="space-y-4 border-r border-white/[0.04] pr-6 last:border-0 last:pr-0">
+              <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 shrink-0" />
+                Color & Format Specs
               </h4>
-              <div className="space-y-sm">
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Encoding Format</span>
-                  <span className="font-bold text-primary">{analysis.imageMetadata?.format || "Unknown"}</span>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Encoding Format</span>
+                  <span className="font-bold text-white">{analysis.imageMetadata?.format || "Unknown"}</span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Color Space</span>
-                  <span className="font-bold text-primary">{analysis.imageMetadata?.colorSpace || "Unknown"}</span>
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Color Space</span>
+                  <span className="font-bold text-white">{analysis.imageMetadata?.colorSpace || "Unknown"}</span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Channels</span>
-                  <span className="font-bold text-primary">{analysis.imageMetadata?.channels ?? "Unknown"}</span>
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Channels</span>
+                  <span className="font-bold text-white">{analysis.imageMetadata?.channels ?? "Unknown"}</span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Bit Depth</span>
-                  <span className="font-bold text-primary">
-                    {analysis.imageMetadata?.depth === "uchar" ? "8-bit Color Depth" : analysis.imageMetadata?.depth ? `${analysis.imageMetadata.depth}-bit Color Depth` : "Unknown"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-body-md">
-                  <span className="text-outline">Alpha Channel</span>
-                  <span className="font-bold text-primary">{analysis.imageMetadata?.hasAlpha ? "Yes (Transparent)" : "No (Opaque)"}</span>
+                <div className="flex justify-between pb-1">
+                  <span className="text-zinc-500">Alpha Channel</span>
+                  <span className="font-bold text-white">{analysis.imageMetadata?.hasAlpha ? "Yes" : "No"}</span>
                 </div>
               </div>
             </div>
 
-            {
-    /* Column 2: Acquisition Device */
-  }
-            <div className="space-y-md border-r border-outline-variant/30 pr-md last:border-0 last:pr-0">
-              <h4 className="text-[11px] font-bold text-secondary uppercase tracking-widest flex items-center gap-xs">
-                <span className="material-symbols-outlined text-[14px]">photo_camera</span>
-                Capture Hardware
+            {/* Hardware panel */}
+            <div className="space-y-4 border-r border-white/[0.04] pr-6 last:border-0 last:pr-0">
+              <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                Hardware Acquisition
               </h4>
-              <div className="space-y-sm">
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Device Manufacturer</span>
-                  <span className="font-bold text-primary truncate max-w-[140px] text-right">{analysis.imageMetadata?.cameraMake || "Not Embedded"}</span>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Camera Make</span>
+                  <span className="font-bold text-white truncate max-w-[130px] text-right">{analysis.imageMetadata?.cameraMake || "Not Embedded"}</span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Device Model</span>
-                  <span className="font-bold text-primary truncate max-w-[140px] text-right">{analysis.imageMetadata?.cameraModel || "Not Embedded"}</span>
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Camera Model</span>
+                  <span className="font-bold text-white truncate max-w-[130px] text-right">{analysis.imageMetadata?.cameraModel || "Not Embedded"}</span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Processing Software</span>
-                  <span className="font-bold text-primary truncate max-w-[140px] text-right" title={analysis.imageMetadata?.software || "No explicit editing software signature detected"}>
-                    {analysis.imageMetadata?.software || "No explicit editing software signature detected"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-body-md">
-                  <span className="text-outline">Metadata Header</span>
-                  <span className={`font-bold text-[10px] uppercase px-1.5 py-0.5 rounded ${analysis.imageMetadata?.cameraMake ? "bg-emerald-100 text-emerald-700" : "bg-surface-container-high text-outline"}`}>
-                    {analysis.imageMetadata?.cameraMake ? "EXIF Header Verified" : "Embedded camera metadata unavailable"}
+                <div className="flex justify-between pb-1">
+                  <span className="text-zinc-500">Processing Soft</span>
+                  <span className="font-bold text-white truncate max-w-[130px] text-right text-[10px]" title={analysis.imageMetadata?.software}>
+                    {analysis.imageMetadata?.software || "None Detected"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {
-    /* Column 3: Temporal & Geo-Location */
-  }
-            <div className="space-y-md">
-              <h4 className="text-[11px] font-bold text-secondary uppercase tracking-widest flex items-center gap-xs">
-                <span className="material-symbols-outlined text-[14px]">location_on</span>
-                Acquisition Context
+            {/* Location context */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                Spatial & Temporal
               </h4>
-              <div className="space-y-sm">
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Capture Date</span>
-                  <span className="font-bold text-primary text-right text-[12px] truncate max-w-[160px]">
-                    {analysis.imageMetadata?.createdDate ? new Date(analysis.imageMetadata.createdDate).toLocaleString() : "Not Embedded"}
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">Captured Date</span>
+                  <span className="font-bold text-white text-[10px]">
+                    {analysis.imageMetadata?.createdDate ? new Date(analysis.imageMetadata.createdDate).toLocaleDateString() : "Not Embedded"}
                   </span>
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">Modification Date</span>
-                  <span className="font-bold text-primary text-right text-[12px] truncate max-w-[160px]">
-                    {analysis.imageMetadata?.modifyDate ? new Date(analysis.imageMetadata.modifyDate).toLocaleString() : "Not Embedded"}
-                  </span>
+                <div className="flex justify-between border-b border-white/[0.02] pb-2">
+                  <span className="text-zinc-500">GPS Coordinates</span>
+                  {analysis.imageMetadata?.gps ? (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${analysis.imageMetadata.gps.latitude},${analysis.imageMetadata.gps.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 hover:underline"
+                    >
+                      {analysis.imageMetadata.gps.latitude.toFixed(3)}, {analysis.imageMetadata.gps.longitude.toFixed(3)}
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  ) : (
+                    <span className="font-bold text-white">Not Embedded</span>
+                  )}
                 </div>
-                <div className="flex justify-between text-body-md border-b border-outline-variant/10 pb-xs">
-                  <span className="text-outline">GPS Location</span>
-                  {analysis.imageMetadata?.gps ? <a
-    href={`https://www.google.com/maps/search/?api=1&query=${analysis.imageMetadata.gps.latitude},${analysis.imageMetadata.gps.longitude}`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="font-bold text-secondary hover:underline flex items-center gap-xs animate-pulse"
-  >
-                      {analysis.imageMetadata.gps.latitude.toFixed(4)}, {analysis.imageMetadata.gps.longitude.toFixed(4)}
-                      <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                    </a> : <span className="font-bold text-primary">Not Embedded</span>}
-                </div>
-                <div className="flex justify-between text-body-md">
-                  <span className="text-outline">Orientation ID</span>
-                  <span className="font-bold text-primary">Tag {analysis.imageMetadata?.orientation || "1"} (Normal)</span>
+                <div className="flex justify-between pb-1">
+                  <span className="text-zinc-500">Orientation ID</span>
+                  <span className="font-bold text-white">Tag {analysis.imageMetadata?.orientation || "1"}</span>
                 </div>
               </div>
             </div>
+            
           </div>
 
-          {
-    /* Diagnostics Section (for Density/DPI and low level properties) */
-  }
-          {showDiagnostics && <div className="text-[10px] font-code-sm text-outline opacity-70 animate-in fade-in pt-sm border-t border-outline-variant/30 grid grid-cols-1 md:grid-cols-2 gap-sm">
-              <p>Density Resolution: {analysis.imageMetadata?.density ? `${analysis.imageMetadata.density} DPI` : "Standard Density"}</p>
-              <p>Embedded Color Profile: {analysis.imageMetadata?.hasProfile ? "Yes" : "No"}</p>
-            </div>}
-
-          {
-    /* Platform Optimization & Interpretation Summary Disclaimer */
-  }
-          <div className="mt-md p-md bg-surface-container-low border border-outline-variant/30 rounded-lg text-body-md text-on-surface-variant flex items-start gap-sm animate-in fade-in duration-300">
-            <span className="material-symbols-outlined text-secondary text-[20px] mt-0.5">info</span>
+          {/* Alert Callout summary */}
+          <div className="mt-4 p-4 bg-white/[0.01] border border-white/[0.04] rounded-xl text-xs text-zinc-400 flex items-start gap-3">
+            <Info className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              Metadata structure is consistent with a compressed or web-optimized image export. Missing embedded camera metadata is common in platform-processed uploads.
+              Metadata schema complies with standard web-optimized compression parameters. Lack of camera EXIF is typical for media processed by platforms prior to uploading.
             </p>
           </div>
+          
         </div>
 
       </div>
 
-      {
-    /* Action Footer */
-  }
-      <footer className="mt-2xl pt-xl border-t border-outline-variant flex justify-between items-center">
-        <div className="flex items-center gap-md text-outline font-body-md">
-          <div className="flex items-center gap-xs">
-            <span className="material-symbols-outlined text-[18px]">verified_user</span>
-            <span className="font-code-sm opacity-60 uppercase text-[12px]">Integrity Hash: {job.id.substring(0, 12)}</span>
-          </div>
+      {/* Action Footer */}
+      <footer className="mt-12 pt-8 border-t border-white/[0.04] flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-2 text-zinc-500 text-xs">
+          <ShieldCheck className="w-4 h-4 text-purple-400" />
+          <span className="font-code-sm text-[11px] uppercase tracking-wider opacity-70">
+            Pipeline Integrity Verification Code: {job.id.substring(0, 12).toUpperCase()}
+          </span>
         </div>
-        <div className="flex gap-md">
-          <Link to="/jobs" className="px-lg py-md border border-primary rounded-lg text-primary font-label-md hover:bg-surface-container-high transition-colors">
-            Return to List
+        
+        <div className="flex gap-3 w-full sm:w-auto">
+          <Link 
+            to="/jobs" 
+            className="flex-grow sm:flex-grow-0 px-6 py-2.5 border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04] text-zinc-300 hover:text-white rounded-full text-xs font-bold text-center transition-all"
+          >
+            Return to Dashboard
           </Link>
-          <button className="px-lg py-md bg-primary text-on-primary rounded-lg font-label-md flex items-center gap-sm hover:opacity-90 transition-opacity shadow-sm">
-            <span className="material-symbols-outlined text-[20px]">print</span>
+          
+          <button 
+            type="button"
+            className="flex-grow sm:flex-grow-0 px-6 py-2.5 bg-white text-[#030303] rounded-full flex items-center justify-center gap-2 text-xs font-bold shadow-[0_4px_12px_rgba(255,255,255,0.15)] hover:bg-zinc-200 transition-all hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <Printer className="w-3.5 h-3.5" />
             Export Audit Report
           </button>
         </div>
       </footer>
-    </div>;
+      
+    </div>
+  );
 };
-var JobResults_default = JobResults;
-export {
-  JobResults_default as default
-};
+
+export default JobResults;

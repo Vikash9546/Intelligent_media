@@ -129,12 +129,27 @@ const JobResults = () => {
     const formattedDate = new Date(job.createdAt).toLocaleString();
     const scoreColor = analysis.recommendation.severity === "success" ? "#10b981" : analysis.recommendation.severity === "warning" ? "#f59e0b" : "#ef4444";
 
+    const summaryHtml = analysis.recommendation.summary && analysis.recommendation.summary.length > 0
+      ? `<ul style="margin: 10px 0 0 0; padding-left: 20px; font-size: 11.5px; color: #44403c;">
+          ${analysis.recommendation.summary.map(s => '<li>' + s + '</li>').join("")}
+         </ul>`
+      : "";
+
+    const platesHtml = analysis.ocr.plates && analysis.ocr.plates.length > 0
+      ? analysis.ocr.plates.map(p => `<span class="plate-badge">${p}</span>`).join(" ")
+      : '<span style="color: #78716c; font-style: italic;">No registration plate geometry extracted.</span>';
+
+    const authenticityHtml = `Capture source: <span class="bold-value">${analysis.authenticity.source}</span>. ` +
+      (analysis.authenticity.flags && analysis.authenticity.flags.length > 0
+        ? `Tamper Indicator Alerts: <span style="color: #ef4444; font-weight:700;">${analysis.authenticity.flags.join(", ")}</span>`
+        : `EXIF and structural integrity indicators verify no manipulation.`);
+
     const reportHtml = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MediaPipe Trust Audit Report - \${verificationCode}</title>
+  <title>MediaPipe Trust Audit Report - ${verificationCode}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
     
@@ -243,7 +258,7 @@ const JobResults = () => {
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      border: 6px solid \${scoreColor};
+      border: 6px solid ${scoreColor};
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -304,10 +319,10 @@ const JobResults = () => {
     }
 
     .recommendation-banner {
-      border: 2px solid \${scoreColor};
+      border: 2px solid ${scoreColor};
       border-radius: 12px;
       padding: 20px;
-      background-color: \${analysis.recommendation.severity === "success" ? "#f0fdf4" : analysis.recommendation.severity === "warning" ? "#fffbeb" : "#fef2f2"};
+      background-color: ${analysis.recommendation.severity === "success" ? "#f0fdf4" : analysis.recommendation.severity === "warning" ? "#fffbeb" : "#fef2f2"};
       margin-bottom: 35px;
     }
 
@@ -420,8 +435,8 @@ const JobResults = () => {
     }
 
     .stamp {
-      border: 3px double \${scoreColor};
-      color: \${scoreColor};
+      border: 3px double ${scoreColor};
+      color: ${scoreColor};
       font-weight: 800;
       font-size: 14px;
       text-transform: uppercase;
@@ -464,11 +479,11 @@ const JobResults = () => {
       <h4 class="card-title">Operational Health Index</h4>
       <div class="score-block">
         <div class="score-circle">
-          <span class="score-value">\${Math.round(analysis.trustScore)}</span>
+          <span class="score-value">${Math.round(analysis.trustScore)}</span>
           <span class="score-label">Index</span>
         </div>
         <div class="score-details">
-          <h3>\${analysis.trustLevel}</h3>
+          <h3>${analysis.trustLevel}</h3>
           <p>Scored across 5 distinct dimensions of visual & system trust.</p>
         </div>
       </div>
@@ -480,19 +495,19 @@ const JobResults = () => {
       <table class="meta-table">
         <tr>
           <td class="label">Job ID Reference</td>
-          <td class="value font-code-sm">\${job.id.substring(0, 16).toUpperCase()}</td>
+          <td class="value font-code-sm">${job.id.substring(0, 16).toUpperCase()}</td>
         </tr>
         <tr>
           <td class="label">Filename</td>
-          <td class="value">\${job.originalFilename}</td>
+          <td class="value">${job.originalFilename}</td>
         </tr>
         <tr>
           <td class="label">Encoding Specification</td>
-          <td class="value">\${analysis.imageMetadata?.format || "Standard Image"} (\${job.mimeType})</td>
+          <td class="value">${analysis.imageMetadata?.format || "Standard Image"} (${job.mimeType})</td>
         </tr>
         <tr>
           <td class="label">Processed Timestamp</td>
-          <td class="value">\${formattedDate}</td>
+          <td class="value">${formattedDate}</td>
         </tr>
       </table>
     </div>
@@ -501,11 +516,8 @@ const JobResults = () => {
   <!-- Executive Recommendation -->
   <div class="recommendation-banner">
     <h3>Executive Outcome Summary</h3>
-    <p><strong>\${analysis.recommendation.label}:</strong> \${analysis.recommendation.desc}</p>
-    \${analysis.recommendation.summary.length > 0 ? \`
-    <ul style="margin: 10px 0 0 0; padding-left: 20px; font-size: 11.5px; color: #44403c;">
-      \${analysis.recommendation.summary.map(s => \`<li>\${s}</li>\`).join("")}
-    </ul>\` : ""}
+    <p><strong>${analysis.recommendation.label}:</strong> ${analysis.recommendation.desc}</p>
+    ${summaryHtml}
   </div>
 
   <!-- Primary Metrics Table -->
@@ -522,45 +534,37 @@ const JobResults = () => {
       <tr>
         <td class="bold-value">Clarity & Focus</td>
         <td>
-          \${analysis.blur.desc} (Edge Energy Coherence: <span class="bold-value">\${analysis.blur.details?.perceptualLabels?.edgeEnergy || "Standard"}</span>)
+          ${analysis.blur.desc} (Edge Energy Coherence: <span class="bold-value">${analysis.blur.details?.perceptualLabels?.edgeEnergy || "Standard"}</span>)
         </td>
-        <td style="text-align: right; font-weight: 700; color: \${analysis.blur.severity === "success" ? "#10b981" : "#d97706"};">
-          \${analysis.blur.label.toUpperCase()}
+        <td style="text-align: right; font-weight: 700; color: ${analysis.blur.severity === "success" ? "#10b981" : "#d97706"};">
+          ${analysis.blur.label.toUpperCase()}
         </td>
       </tr>
       <tr>
         <td class="bold-value">Identity Extraction</td>
         <td>
-          Standard plate geometries identified: 
-          \${analysis.ocr.plates.length > 0 ? 
-            analysis.ocr.plates.map(p => \`<span class="plate-badge">\${p}</span>\`).join(" ") : 
-            \`<span style="color: #78716c; italic">No registration plate geometry extracted.</span>\`
-          }
+          Standard plate geometries identified: ${platesHtml}
         </td>
         <td style="text-align: right; font-weight: 700;">
-          \${getReadableOcrLabel(analysis.ocr.readability, analysis.ocr.confidence, analysis.ocr.plates).toUpperCase()}
+          ${getReadableOcrLabel(analysis.ocr.readability, analysis.ocr.confidence, analysis.ocr.plates).toUpperCase()}
         </td>
       </tr>
       <tr>
         <td class="bold-value">Illumination</td>
         <td>
-          \${analysis.brightness.desc} (Exposure Profile: <span class="bold-value">\${analysis.brightness.details?.perceptualLabels?.exposure || "Standard"}</span>)
+          ${analysis.brightness.desc} (Exposure Profile: <span class="bold-value">${analysis.brightness.details?.perceptualLabels?.exposure || "Standard"}</span>)
         </td>
-        <td style="text-align: right; font-weight: 700; color: \${analysis.brightness.severity === "success" ? "#10b981" : "#d97706"};">
-          \${analysis.brightness.label.toUpperCase()}
+        <td style="text-align: right; font-weight: 700; color: ${analysis.brightness.severity === "success" ? "#10b981" : "#d97706"};">
+          ${analysis.brightness.label.toUpperCase()}
         </td>
       </tr>
       <tr>
         <td class="bold-value">Authenticity</td>
         <td>
-          Capture source: <span class="bold-value">\${analysis.authenticity.source}</span>. 
-          \${analysis.authenticity.flags.length > 0 ? 
-            \`Tamper Indicator Alerts: <span style="color: #ef4444; font-weight:700;">\${analysis.authenticity.flags.join(", ")}</span>\` : 
-            \`EXIF and structural integrity indicators verify no manipulation.\`
-          }
+          ${authenticityHtml}
         </td>
-        <td style="text-align: right; font-weight: 700; color: \${analysis.authenticity.riskLevel === "low" ? "#10b981" : "#ef4444"};">
-          \${analysis.authenticity.label.toUpperCase()}
+        <td style="text-align: right; font-weight: 700; color: ${analysis.authenticity.riskLevel === "low" ? "#10b981" : "#ef4444"};">
+          ${analysis.authenticity.label.toUpperCase()}
         </td>
       </tr>
       <tr>
@@ -568,8 +572,8 @@ const JobResults = () => {
         <td>
           Perceptual fingerprint matches in surveillance index. Uniqueness check complete.
         </td>
-        <td style="text-align: right; font-weight: 700; color: \${analysis.uniqueness.passed !== false ? "#10b981" : "#ef4444"};">
-          \${analysis.uniqueness.label.toUpperCase()}
+        <td style="text-align: right; font-weight: 700; color: ${analysis.uniqueness.passed !== false ? "#10b981" : "#ef4444"};">
+          ${analysis.uniqueness.label.toUpperCase()}
         </td>
       </tr>
     </tbody>
@@ -580,37 +584,34 @@ const JobResults = () => {
   <div class="exif-grid">
     <div class="exif-item">
       <div class="exif-label">Acquisition Hardware Make</div>
-      <div class="exif-val">\${analysis.imageMetadata?.cameraMake || "No EXIF Make Tag"}</div>
+      <div class="exif-val">${analysis.imageMetadata?.cameraMake || "No EXIF Make Tag"}</div>
     </div>
     <div class="exif-item">
       <div class="exif-label">Acquisition Hardware Model</div>
-      <div class="exif-val">\${analysis.imageMetadata?.cameraModel || "No EXIF Model Tag"}</div>
+      <div class="exif-val">${analysis.imageMetadata?.cameraModel || "No EXIF Model Tag"}</div>
     </div>
     <div class="exif-item">
       <div class="exif-label">Tonal Depth & Channels</div>
       <div class="exif-val">
-        \${analysis.imageMetadata?.depth === "uchar" ? "8-bit" : analysis.imageMetadata?.depth || "8-bit"} color depth / \${analysis.imageMetadata?.channels || 3} channels
+        ${analysis.imageMetadata?.depth === "uchar" ? "8-bit" : analysis.imageMetadata?.depth || "8-bit"} color depth / ${analysis.imageMetadata?.channels || 3} channels
       </div>
     </div>
     <div class="exif-item">
       <div class="exif-label">Technical Resolution</div>
       <div class="exif-val">
-        \${renderResolution(analysis.specs.width, analysis.specs.height)} (\${(analysis.specs.megapixels || 0).toFixed(2)} MP)
+        ${renderResolution(analysis.specs.width, analysis.specs.height)} (${(analysis.specs.megapixels || 0).toFixed(2)} MP)
       </div>
     </div>
     <div class="exif-item">
       <div class="exif-label">Temporal Date tag</div>
       <div class="exif-val">
-        \${analysis.imageMetadata?.createdDate ? new Date(analysis.imageMetadata.createdDate).toLocaleString() : "No EXIF Date Tag"}
+        ${analysis.imageMetadata?.createdDate ? new Date(analysis.imageMetadata.createdDate).toLocaleString() : "No EXIF Date Tag"}
       </div>
     </div>
     <div class="exif-item">
       <div class="exif-label">Location Context Tag</div>
       <div class="exif-val">
-        \${analysis.imageMetadata?.gps ? 
-          \`\${analysis.imageMetadata.gps.latitude.toFixed(4)}°, \${analysis.imageMetadata.gps.longitude.toFixed(4)}°\` : 
-          "GPS Coordinates Not Embedded"
-        }
+        	h${analysis.imageMetadata?.gps ? `${analysis.imageMetadata.gps.latitude.toFixed(4)}°, ${analysis.imageMetadata.gps.longitude.toFixed(4)}°` : "GPS Coordinates Not Embedded"}
       </div>
     </div>
   </div>
@@ -618,11 +619,11 @@ const JobResults = () => {
   <div class="footer">
     <div>
       <p style="margin: 0; font-weight: 700; color: #1c1917;">Certified MediaPipe Trust Ingestion Outcome</p>
-      <p style="margin: 2px 0 0 0;">Integrity Fingerprint: \${job.id.toUpperCase()}</p>
+      <p style="margin: 2px 0 0 0;">Integrity Fingerprint: ${job.id.toUpperCase()}</p>
     </div>
     
     <div style="text-align: right;">
-      <div class="stamp">\${analysis.trustLevel.toUpperCase()} PASS</div>
+      <div class="stamp">${analysis.trustLevel.toUpperCase()} PASS</div>
     </div>
   </div>
 
@@ -632,7 +633,7 @@ const JobResults = () => {
         window.print();
       }, 500);
     }
-  <\/script>
+  </script>
 </body>
 </html>
     `;
@@ -640,9 +641,7 @@ const JobResults = () => {
     printWindow.document.open();
     printWindow.document.write(reportHtml);
     printWindow.document.close();
-  };
-
-  if (loading || isStillProcessing) {
+  };  if (loading || isStillProcessing) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[70vh] flex flex-col items-center justify-center space-y-8">
         <div className="relative w-24 h-24">

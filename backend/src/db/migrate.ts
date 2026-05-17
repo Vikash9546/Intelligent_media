@@ -110,6 +110,12 @@ const migrations: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_image_hashes_job  ON image_hashes(job_id);
     `,
   },
+  {
+    name: '006_add_trust_assessment',
+    sql: `
+      ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS trust_assessment JSONB;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -9,17 +9,6 @@ import {
   BRIGHTNESS_BLOWN_RATIO,
 } from '../utils/constants';
 
-/**
- * Brightness Analysis — Perceptual Exposure Pipeline
- * 
- * Upgrades:
- * 1. Histogram Percentile Analysis (P5, P50, P95)
- * 2. Connected Highlight Region Detection (Filters specular highlights)
- * 3. RMS Contrast Metric (Measures clarity and tonal separation)
- * 4. Gaussian Spatial Weighting (Prioritizes lower-center regions)
- * 5. Sigmoid Confidence Scoring (Non-linear perceptual matching)
- */
-
 /** Extracts P5, P50 (median), and P95 from image histogram */
 function computeHistogramPercentiles(data: Uint8Array): { p5: number; p50: number; p95: number } {
   const histogram = new Uint32Array(256);
@@ -49,7 +38,6 @@ function computeRMSContrast(data: Uint8Array, mean: number): number {
 
 /** 
  * Finds the largest connected blown region using a coarse 16x16 grid.
- * This filters out small specular highlights like headlights or chrome reflections.
  */
 function getLargestBlownRegionRatio(data: Uint8Array, width: number, height: number): number {
   const GRID_SIZE = 16;
@@ -69,7 +57,6 @@ function getLargestBlownRegionRatio(data: Uint8Array, width: number, height: num
     }
   }
 
-  // Simple seed-fill to find max connected component
   let maxArea = 0;
   const visited = new Set<number>();
   for (let i = 0; i < grid.length; i++) {
@@ -112,21 +99,17 @@ export async function analyzeBrightness(filePath: string): Promise<CheckResult> 
   const { width, height } = info;
   const pixels = new Uint8Array(data);
 
-  // 1. Histogram Percentiles
   const { p5, p50: medianLuminance, p95 } = computeHistogramPercentiles(pixels);
 
-  // 2. Local Contrast (RMS)
   let sum = 0;
   for (let i = 0; i < pixels.length; i++) sum += pixels[i];
   const meanLuminance = sum / pixels.length;
   const rmsContrast = computeRMSContrast(pixels, meanLuminance);
 
-  // 3. Spatial Importance (Gaussian-style weighting for lower-center)
   let weightedSum = 0;
   let totalWeight = 0;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // Gaussian center at (0.5w, 0.75h)
       const dx = (x / width - 0.5) / 0.3;
       const dy = (y / height - 0.75) / 0.25;
       const weight = Math.exp(-(dx * dx + dy * dy));
@@ -136,32 +119,25 @@ export async function analyzeBrightness(filePath: string): Promise<CheckResult> 
   }
   const weightedLuminance = weightedSum / totalWeight;
 
-  // 4. Overexposure (Connected Regions)
   const blownRegionRatio = getLargestBlownRegionRatio(pixels, width, height);
-
-  // 5. Underexposure detail retention (Spread between P5 and P50)
   const shadowSpread = medianLuminance - p5;
 
-  // VERDICT LOGIC
   const failures: string[] = [];
   if (medianLuminance < BRIGHTNESS_TOO_DARK) failures.push('underexposed');
   if (medianLuminance > BRIGHTNESS_TOO_BRIGHT) failures.push('overexposed');
   if (p5 < 10 && shadowSpread < 20) failures.push('shadow_clipping');
   if (p95 > 250 && blownRegionRatio > 0.15) failures.push('highlight_clipping');
   if (rmsContrast < 25) failures.push('low_contrast');
-  if (weightedLuminance < 45) failures.push('localized_underexposure');
 
   const passed = failures.length === 0;
 
-  let verdict = 'ok';
+  let verdict = 'balanced';
   if (failures.length > 0) {
     if (failures.includes('underexposed') || failures.includes('shadow_clipping')) verdict = 'too_dark';
     else if (failures.includes('overexposed') || failures.includes('highlight_clipping')) verdict = 'too_bright';
     else verdict = failures[0];
   }
-  if (failures.length > 2) verdict = 'multiple_issues';
 
-  // SIGMOID CONFIDENCE SCORING
   const contrastScore = sigmoid(rmsContrast, 0.15, 40);
   const shadowScore   = sigmoid(shadowSpread, 0.1, 30);
   const highlightScore = 1 - sigmoid(blownRegionRatio, 20, 0.2);
@@ -174,14 +150,16 @@ export async function analyzeBrightness(filePath: string): Promise<CheckResult> 
     passed,
     confidence: Math.round(confidence * 100) / 100,
     details: {
-      meanLuminance: Math.round(meanLuminance * 100) / 100,
       medianLuminance,
-      percentiles: { p5, p50: medianLuminance, p95 },
       rmsContrast: Math.round(rmsContrast * 100) / 100,
       blownRegionRatio: Math.round(blownRegionRatio * 100) / 100,
-      weightedLuminance: Math.round(weightedLuminance * 100) / 100,
       failures,
       verdict,
+      perceptualLabels: {
+        exposure: medianLuminance < 40 ? 'severely_underexposed' : medianLuminance < 75 ? 'slightly_dark' : medianLuminance > 210 ? 'overexposed' : 'balanced',
+        contrast: rmsContrast < 20 ? 'flat' : rmsContrast < 35 ? 'low' : 'optimal',
+        dynamicRange: blownRegionRatio > 0.2 ? 'severely_clipped' : shadowSpread < 15 ? 'crushed_shadows' : 'optimal'
+      }
     }
   };
 }

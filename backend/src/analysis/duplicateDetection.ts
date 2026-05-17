@@ -4,13 +4,6 @@ import fs from 'fs';
 import { CheckResult } from './types';
 import { query } from '../db/pool';
 
-/**
- * Duplicate Detection — Two-Stage Identification
- * 
- * Stage 1: Exact MD5 Hash Fast-Path
- * Stage 2: Perceptual dHash (Difference Hash) comparison
- */
-
 /** Helper to count differing bits between two hex-encoded 64-bit hashes */
 function getHammingDistance(a: string, b: string): number {
   const diff = BigInt('0x' + a) ^ BigInt('0x' + b);
@@ -32,10 +25,9 @@ export async function analyzeDuplicates(
   );
 
   if (exactMatches.length > 0) {
-    // Record this job's hash before returning
     await query(
       'INSERT INTO image_hashes (job_id, md5_hash, d_hash, created_at) VALUES ($1, $2, $3, now())',
-      [jobId, md5Hash, '0000000000000000'] // dummy dHash for exact match
+      [jobId, md5Hash, '0000000000000000']
     );
 
     return {
@@ -43,18 +35,15 @@ export async function analyzeDuplicates(
       passed: false,
       confidence: 1.0,
       details: {
-        md5Hash,
-        dHash: null,
-        nearestMatchJobId: exactMatches[0].job_id,
         hammingDistance: 0,
-        duplicateType: 'exact',
-        stage: 'md5_fast_path'
+        duplicateType: 'exact_match',
+        perceptualLabel: 'Previously Submitted',
+        severity: 'critical'
       }
     };
   }
 
   // --- STAGE 2: Perceptual hash (dHash) ---
-  // Resize to 9x8 grayscale, compare adjacent pixels -> 64-bit hash
   const { data } = await sharp(filePath)
     .resize(9, 8, { fit: 'fill' })
     .grayscale()
@@ -70,7 +59,6 @@ export async function analyzeDuplicates(
   }
   const dHashHex = BigInt('0b' + dHashBinary).toString(16).padStart(16, '0');
 
-  // Fetch up to 500 most recent hashes
   const { rows: recentHashes } = await query<{ job_id: string, d_hash: string }>(
     'SELECT job_id, d_hash FROM image_hashes WHERE job_id != $1 ORDER BY created_at DESC LIMIT 500',
     [jobId]
@@ -87,32 +75,35 @@ export async function analyzeDuplicates(
     }
   }
 
-  // TIERED SIMILARITY THRESHOLDS
+  // TIERED SIMILARITY THRESHOLDS (User requested thresholds)
   let passed = true;
-  let confidence = 1.0;
-  let duplicateType: 'exact_perceptual' | 'near_identical' | 'likely_duplicate' | 'similar_scene' | 'unique' = 'unique';
+  let duplicateType: string = 'unique';
+  let perceptualLabel: string = 'Unique Content';
+  let severity: string = 'none';
 
   if (minDistance !== null) {
     if (minDistance === 0) {
       passed = false;
-      confidence = 0.98;
       duplicateType = 'exact_perceptual';
+      perceptualLabel = 'Previously Submitted';
+      severity = 'critical';
     } else if (minDistance <= 5) {
       passed = false;
-      confidence = 0.90;
-      duplicateType = 'near_identical';
+      duplicateType = 'highly_similar';
+      perceptualLabel = 'Highly Similar';
+      severity = 'high';
     } else if (minDistance <= 12) {
       passed = false;
-      confidence = 0.70;
-      duplicateType = 'likely_duplicate';
-    } else if (minDistance <= 20) {
-      passed = true;
-      confidence = 0.60;
-      duplicateType = 'similar_scene';
+      duplicateType = 'visually_related';
+      perceptualLabel = 'Visually Related';
+      severity = 'medium';
+    } else {
+      duplicateType = 'unique';
+      perceptualLabel = 'Unique Content';
+      severity = 'none';
     }
   }
 
-  // WRITE BACK AFTER CHECK
   await query(
     'INSERT INTO image_hashes (job_id, md5_hash, d_hash, created_at) VALUES ($1, $2, $3, now())',
     [jobId, md5Hash, dHashHex]
@@ -121,14 +112,13 @@ export async function analyzeDuplicates(
   return {
     checkName: 'duplicate_detection',
     passed,
-    confidence,
+    confidence: 1.0,
     details: {
-      md5Hash,
       dHash: dHashHex,
-      nearestMatchJobId,
       hammingDistance: minDistance,
       duplicateType,
-      stage: 'perceptual_hash'
+      perceptualLabel,
+      severity
     }
   };
 }

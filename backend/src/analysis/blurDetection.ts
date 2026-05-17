@@ -123,7 +123,7 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
   const laplacianVar = computeLaplacianVariance8(pixels, width, height);
   const { tenengrad, entropy, dominance } = computeGradientsEntropyAndDominance(pixels, width, height);
   
-  const entropyNorm = entropy / MAX_ENTROPY;
+  const entropyNorm = clamp(entropy / MAX_ENTROPY, 0, 1);
   const coherence = dominance * (1 - entropyNorm);
 
   // METRIC 3: Weighted Spatial Blocks (4x4)
@@ -150,10 +150,9 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
   const sortedBlocks = [...blockVariances].sort((a, b) => a - b);
   const lowerQuartileBlockSharpness = sortedBlocks[Math.floor(sortedBlocks.length * 0.25)];
 
-  // STABILIZED MOTION BLUR DETECTION
-  const motionBlurDetected = (laplacianVar > BLUR_HIGH_LAPLACIAN_THRESHOLD) && 
-                             (tenengrad > BLUR_TENENGRAD_THRESHOLD * 1.5) &&
-                             (coherence > BLUR_COHERENCE_THRESHOLD);
+  // REFINED MOTION BLUR DETECTION (More sensitive to coherence smearing)
+  const motionBlurDetected = (coherence > BLUR_COHERENCE_THRESHOLD) || 
+                             (coherence > 0.10 && laplacianVar > BLUR_HIGH_LAPLACIAN_THRESHOLD * 0.8);
 
   // SUBJECT-AWARE OVERRIDE (Center ROI)
   const centerRoiVar = computeLaplacianVariance8(
@@ -161,7 +160,8 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
     Math.floor(width * 0.25), Math.floor(height * 0.20),
     Math.floor(width * 0.75), Math.floor(height * 0.80)
   );
-  const centerRoiOverride = centerRoiVar >= (BLUR_THRESHOLD * 1.5) && entropy > BLUR_MIN_ENTROPY_FOR_ROI;
+  // ROI override is disabled if motion blur is detected to prevent sharp background from masking smearing
+  const centerRoiOverride = !motionBlurDetected && centerRoiVar >= (BLUR_THRESHOLD * 1.5) && entropy > BLUR_MIN_ENTROPY_FOR_ROI;
 
   // ENSEMBLE VOTING (With Motion Blur Integration)
   let blurryVotes = 0;
@@ -170,21 +170,33 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
   if (lowerQuartileBlockSharpness < BLUR_LOWER_QUARTILE_BLOCK_THRESHOLD) blurryVotes++;
   if (motionBlurDetected) blurryVotes += 2; // Strong failure signal
 
-  const passed = !motionBlurDetected && (centerRoiOverride || blurryVotes <= 1);
+  const passed = (centerRoiOverride || blurryVotes <= 1) && !motionBlurDetected;
 
-  // STABLE ADDITIVE CONFIDENCE SCORING
-  const laplacianNorm = clamp(laplacianVar / 500, 0, 1);
-  const tenengradNorm = clamp(tenengrad / 1500, 0, 1);
-  const blockNorm     = clamp(lowerQuartileBlockSharpness / 250, 0, 1);
+  // PERCEPTUAL CONFIDENCE SCORING (Balanced against streaking energy)
+  const laplacianNorm = clamp(laplacianVar / 600, 0, 1);
+  const tenengradNorm = clamp(tenengrad / 1800, 0, 1);
+  const blockNorm     = clamp(lowerQuartileBlockSharpness / 300, 0, 1);
   
+  // Start with energy-based fidelity
   let confidence = (0.35 * laplacianNorm) + (0.35 * tenengradNorm) + (0.30 * blockNorm);
   
-  // Additive Penalty reductions
-  if (coherence > 0.05) confidence -= (coherence - 0.05) * 1.5;
-  if (motionBlurDetected) confidence -= 0.35;
-  if (!passed && confidence > 0.5) confidence = 0.45; // Caps failed image confidence
+  // Apply Perceptual Penalties for Smearing (Non-linear)
+  if (coherence > 0.04) {
+    const penalty = Math.pow(coherence * 2, 1.5); // Sharp drop as coherence increases
+    confidence -= penalty;
+  }
+
+  // Hard caps for failed/blurry states to prevent "100% Blurry" confusing labels
+  if (motionBlurDetected) {
+    confidence = Math.min(confidence, 0.40);
+  } else if (!passed) {
+    confidence = Math.min(confidence, 0.65);
+  }
   
   confidence = clamp(confidence, 0, 1);
+
+  // Perceptual Labeling Helpers
+  const getLevel = (v: number, t: number) => v > t * 2 ? 'High' : v > t ? 'Moderate' : 'Low';
 
   return {
     checkName: 'blur_detection',
@@ -193,12 +205,17 @@ export async function analyzeBlur(filePath: string): Promise<CheckResult> {
     details: {
       laplacianVariance: Math.round(laplacianVar * 100) / 100,
       tenegradScore: Math.round(tenengrad * 100) / 100,
-      directionalCoherence: Math.round(coherence * 100) / 100,
+      directionalCoherence: Math.round(coherence * 1000) / 1000,
       lowerQuartileBlockSharpness: Math.round(lowerQuartileBlockSharpness * 100) / 100,
       centerRoiVariance: Math.round(centerRoiVar * 100) / 100,
       centerRoiOverride,
       motionBlurDetected,
       blurryVoteCount: blurryVotes,
+      perceptualLabels: {
+        edgeEnergy: getLevel(laplacianVar, BLUR_THRESHOLD),
+        motionRisk: coherence > 0.15 ? 'Severe' : coherence > 0.08 ? 'High' : coherence > 0.04 ? 'Moderate' : 'Low',
+        spatialClarity: getLevel(lowerQuartileBlockSharpness, BLUR_LOWER_QUARTILE_BLOCK_THRESHOLD)
+      },
       thresholds: { 
         laplacian: BLUR_THRESHOLD, 
         tenengrad: BLUR_TENENGRAD_THRESHOLD, 

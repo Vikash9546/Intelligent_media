@@ -1,112 +1,96 @@
-import { CheckResult } from './types';
-import { QUALITY_WEIGHTS } from '../utils/constants';
+import { CheckResult, TrustAssessment } from './types';
 import { analyzeBlur } from './blurDetection';
 import { analyzeBrightness } from './brightnessAnalysis';
 import { analyzeDuplicates } from './duplicateDetection';
 import { analyzeScreenshot } from './screenshotDetection';
 import { analyzeOcrPlate } from './ocrPlateDetection';
 import { analyzeDimensions } from './dimensionValidation';
+import { analyzeTampering } from './tamperingDetection';
+import { computeTrustAssessment } from './trustEngine';
 import logger from '../utils/logger';
 
 export interface AnalysisRunResult {
   checks: CheckResult[];
+  trustAssessment: TrustAssessment;
   qualityScore: number;
   perceptualHash: string | null;
 }
 
 /**
- * Orchestrate all six analysis checks concurrently.
- *
- * WHY Promise.allSettled OVER Promise.all?
- * Promise.all short-circuits on the first rejection — one failing check
- * would abort ALL checks, losing partial results. allSettled waits for
- * every promise and gives us fulfilled/rejected status per check.
- * This means a Tesseract crash doesn't prevent blur/brightness results
- * from being saved, and we can surface exactly which check failed.
+ * Orchestrate the Production-Grade Vehicle Image Trust Engine.
+ * 
+ * Fuses 7 independent CV signals into a unified trustworthiness model.
  */
 export async function runAllAnalyses(
   filePath: string,
   jobId: string,
 ): Promise<AnalysisRunResult> {
   const startMs = Date.now();
+  logger.info({ jobId }, 'Starting production-grade trust analysis pipeline');
 
-  logger.info({ jobId, filePath }, 'Starting concurrent analysis checks');
-
-  // All checks run concurrently — Sharp operations are CPU-bound but Node.js
-  // releases the event loop between I/O operations, so this still benefits
-  // from concurrency for the I/O portions.
-  const [blurResult, brightnessResult, duplicateResult, screenshotResult, ocrResult, dimensionResult] =
-    await Promise.allSettled([
-      analyzeBlur(filePath),
-      analyzeBrightness(filePath),
-      analyzeDuplicates(filePath, jobId),
-      analyzeScreenshot(filePath),
-      analyzeOcrPlate(filePath),
-      analyzeDimensions(filePath),
-    ]);
+  // 1. Execute all independent computer vision checks concurrently
+  const settledResults = await Promise.allSettled([
+    analyzeBlur(filePath),
+    analyzeBrightness(filePath),
+    analyzeDuplicates(filePath, jobId),
+    analyzeScreenshot(filePath),
+    analyzeOcrPlate(filePath),
+    analyzeDimensions(filePath),
+    analyzeTampering(filePath)
+  ]);
 
   const checks: CheckResult[] = [];
   let perceptualHash: string | null = null;
 
-  // Unwrap settled results, creating synthetic failure entries for rejected checks
-  const settled = [
-    { name: 'blur_detection', result: blurResult },
-    { name: 'brightness_analysis', result: brightnessResult },
-    { name: 'duplicate_detection', result: duplicateResult },
-    { name: 'screenshot_detection', result: screenshotResult },
-    { name: 'ocr_plate_detection', result: ocrResult },
-    { name: 'dimension_validation', result: dimensionResult },
+  const checkNames = [
+    'blur_detection',
+    'brightness_analysis',
+    'duplicate_detection',
+    'screenshot_detection',
+    'ocr_plate_detection',
+    'dimension_validation',
+    'tampering_detection'
   ];
 
-  for (const { name, result } of settled) {
+  // 2. Unwrap results and handle failures gracefully
+  settledResults.forEach((result, idx) => {
+    const name = checkNames[idx];
     if (result.status === 'fulfilled') {
-      const checkResult = result.value as CheckResult & { hash?: string };
+      const checkResult = result.value as CheckResult;
       checks.push(checkResult);
 
-      // Extract perceptual hash from duplicate detection result
       if (name === 'duplicate_detection' && checkResult.details?.dHash) {
         perceptualHash = checkResult.details.dHash as string;
       }
-
-      logger.info(
-        {
-          jobId,
-          checkName: name,
-          passed: checkResult.passed,
-          confidence: checkResult.confidence,
-          durationMs: Date.now() - startMs,
-        },
-        'Check completed',
-      );
     } else {
-      // Check threw an unexpected error — record as failed with confidence 0
-      logger.error(
-        { jobId, checkName: name, err: result.reason },
-        'Analysis check threw an error — recording as failed',
-      );
+      logger.error({ jobId, checkName: name, err: result.reason }, 'Check failed');
       checks.push({
         checkName: name,
         passed: false,
         confidence: 0,
-        details: {
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          checkErrored: true,
-        },
+        details: { error: String(result.reason), checkErrored: true }
       });
     }
-  }
+  });
 
-  // Compute weighted quality score (only passed checks contribute)
-  const qualityScore = checks.reduce((score, check) => {
-    if (!check.passed) return score;
-    const weight = QUALITY_WEIGHTS[check.checkName] ?? 0;
-    return score + check.confidence * weight;
-  }, 0);
+  // 3. FUSE signals into the Trust Assessment
+  const trustAssessment = computeTrustAssessment(checks);
 
   logger.info(
-    { jobId, qualityScore, durationMs: Date.now() - startMs },
-    'All analysis checks complete',
+    { 
+      jobId, 
+      trustScore: trustAssessment.trustScore, 
+      level: trustAssessment.trustLevel,
+      recommendation: trustAssessment.recommendation,
+      durationMs: Date.now() - startMs 
+    },
+    'Trust analysis complete'
   );
 
-  return { checks, qualityScore, perceptualHash };
+  return { 
+    checks, 
+    trustAssessment,
+    qualityScore: trustAssessment.trustScore, // Replace legacy score with trust-aware score
+    perceptualHash 
+  };
 }

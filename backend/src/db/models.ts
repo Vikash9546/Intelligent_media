@@ -16,6 +16,7 @@ export interface ImageJobRow {
   created_at: string;
   updated_at: string;
   processed_at: string | null;
+  trust_assessment: any | null;
 }
 
 export interface AnalysisResultRow {
@@ -58,6 +59,7 @@ export async function updateJobStatus(
     failureReason?: string;
     qualityScore?: number;
     perceptualHash?: string;
+    trustAssessment?: any;
     processedAt?: boolean; // if true, set to now()
   } = {},
 ): Promise<void> {
@@ -76,6 +78,10 @@ export async function updateJobStatus(
   if (extras.perceptualHash !== undefined) {
     sets.push(`perceptual_hash = $${idx++}`);
     params.push(extras.perceptualHash);
+  }
+  if (extras.trustAssessment !== undefined) {
+    sets.push(`trust_assessment = $${idx++}`);
+    params.push(JSON.stringify(extras.trustAssessment));
   }
   if (extras.processedAt) {
     sets.push('processed_at = now()');

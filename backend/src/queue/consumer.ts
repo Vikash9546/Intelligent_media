@@ -55,8 +55,8 @@ async function processImageJob(job: Job<ImageJobPayload>): Promise<void> {
     throw Object.assign(new Error(reason), { failedReason: reason });
   }
 
-  // ── Step 3: Run all 6 analysis checks concurrently ──────────────────────────
-  const { checks, qualityScore, perceptualHash } = await runAllAnalyses(filePath, jobId);
+  // ── Step 3: Run all 7 analysis checks concurrently ──────────────────────────
+  const { checks, qualityScore, perceptualHash, trustAssessment } = await runAllAnalyses(filePath, jobId);
 
   // ── Step 4: Persist each check result to DB ──────────────────────────────────
   // Even if individual inserts fail, we attempt all of them (partial results > none)
@@ -87,14 +87,15 @@ async function processImageJob(job: Job<ImageJobPayload>): Promise<void> {
     throw new Error(`Failed to save ${insertErrors.length}/${checks.length} check results: ${insertErrors.map(e => e.message).join('; ')}`);
   }
 
-  // ── Step 5: Update job to 'completed' with quality score ─────────────────────
+  // ── Step 5: Update job to 'completed' with trust assessment ──────────────────
   await updateJobStatus(jobId, 'completed', {
     qualityScore,
     perceptualHash: perceptualHash ?? undefined,
+    trustAssessment,
     processedAt: true,
   });
 
-  jobLog.info({ qualityScore, checksCount: checks.length }, 'Job completed successfully');
+  jobLog.info({ qualityScore, checksCount: checks.length, trustLevel: trustAssessment.trustLevel }, 'Job completed successfully');
 }
 
 /**

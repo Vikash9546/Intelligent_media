@@ -15,7 +15,6 @@ const Layout: React.FC = () => {
       <aside className="fixed left-0 top-0 h-full w-[280px] border-r border-outline-variant bg-surface/70 backdrop-blur-md z-50 flex flex-col p-md space-y-base shadow-sm">
         <div className="mb-xl px-sm pt-sm">
           <h1 className="font-headline-md text-headline-md font-bold text-primary">MediaPipe</h1>
-          <p className="font-label-md text-label-md text-on-surface-variant">Pipeline Engine v2.4</p>
         </div>
         <nav className="flex-grow space-y-xs">
           <NavLink to="/" className={navLinkClass}>
@@ -30,26 +29,7 @@ const Layout: React.FC = () => {
             <span className="material-symbols-outlined" data-icon="format_list_bulleted">format_list_bulleted</span>
             <span className="font-body-md text-body-md">Jobs</span>
           </NavLink>
-          <NavLink to="/settings" className={navLinkClass}>
-            <span className="material-symbols-outlined" data-icon="settings">settings</span>
-            <span className="font-body-md text-body-md">Settings</span>
-          </NavLink>
         </nav>
-        <div className="mt-auto p-sm">
-          <div className="flex items-center gap-md p-md bg-surface-container-low rounded-xl border border-outline-variant">
-            <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden">
-              <img
-                alt="Professional User Profile"
-                className="w-full h-full rounded-full object-cover"
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100"
-              />
-            </div>
-            <div className="overflow-hidden">
-              <p className="font-label-md text-label-md font-bold truncate">Alex Chen</p>
-              <p className="font-label-md text-label-md text-outline truncate">Pipeline Lead</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* TopAppBar */}

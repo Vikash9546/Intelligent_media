@@ -30,6 +30,7 @@ export async function getJobStatus(req: Request, res: Response): Promise<void> {
       status: job.status,
       originalFilename: job.original_name,
       qualityScore: job.quality_score,
+      trustAssessment: job.trust_assessment,
       createdAt: job.created_at,
       processedAt: job.processed_at,
       retryCount: job.retry_count,
@@ -76,7 +77,8 @@ export async function getJobResults(req: Request, res: Response): Promise<void> 
       'duplicate_detection': 'duplicate',
       'screenshot_detection': 'screenshot',
       'ocr_plate_detection': 'ocr',
-      'dimension_validation': 'dimensions'
+      'dimension_validation': 'dimensions',
+      'tampering_detection': 'tampering'
     };
     
     const key = keyMap[row.check_name] || row.check_name;
@@ -92,6 +94,7 @@ export async function getJobResults(req: Request, res: Response): Promise<void> 
     status: job.status,
     originalFilename: job.original_name,
     qualityScore: job.quality_score,
+    trustAssessment: job.trust_assessment,
     processedAt: job.processed_at,
     createdAt: job.created_at,
     results // Nest under results key for better structure

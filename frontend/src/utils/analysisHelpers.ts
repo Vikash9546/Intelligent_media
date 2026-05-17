@@ -1,8 +1,8 @@
 /**
- * Frontend Interpretation Layer for Analysis Results
+ * Frontend Interpretation Layer for Operational Verification
  * 
- * Maps raw backend metrics and flags to human-perceptual states.
- * Distinguishes between Success, Failure, and Pending/Unavailable states.
+ * Maps raw metrics and trust signals to human-perceptual operational states.
+ * Focuses on verification usability rather than aesthetic quality.
  */
 
 export interface BlurResult {
@@ -16,6 +16,11 @@ export interface BlurResult {
     lowerQuartileBlockSharpness?: number;
     motionBlurDetected?: boolean;
     blurryVoteCount?: number;
+    perceptualLabels?: {
+      edgeEnergy: string;
+      motionRisk: string;
+      spatialClarity: string;
+    };
   };
 }
 
@@ -39,76 +44,100 @@ export interface AnalysisState {
   color: string;
 }
 
-/** Get user-facing status and description for Blur Detection */
+/** Get operational status and description for Sharpness/Blur */
 export const getBlurInterpretation = (result?: BlurResult): AnalysisState => {
   if (!result || !result.details) {
     return {
-      label: 'Analysis Pending',
+      label: 'Analyzing Clarity...',
       severity: 'pending',
       icon: 'hourglass_empty',
-      desc: 'Sharpness evaluation is currently in progress or unavailable.',
+      desc: 'Clarity and motion risk evaluation in progress.',
       color: 'text-outline'
     };
   }
 
   const { details, passed, confidence } = result;
+  const labels = details.perceptualLabels;
 
-  if (details.motionBlurDetected) {
+  // PRIORITY 1: Motion Blur (Smearing)
+  if (details.motionBlurDetected || (labels && (labels.motionRisk === 'Severe' || labels.motionRisk === 'High'))) {
     return {
-      label: 'Motion Blur',
+      label: labels?.motionRisk === 'Severe' ? 'Severe Motion Smearing' : 'Moderate Motion Blur',
       severity: 'error',
       icon: 'motion_photos_off',
-      desc: 'Strong directional streaking detected from camera or subject motion.',
+      desc: 'Directional streaking detected. Detail clarity is compromised for verification.',
       color: 'text-error'
     };
   }
 
+  // PRIORITY 2: Focus Failures
   if (!passed) {
     if ((details.blurryVoteCount ?? 0) >= 2) {
       return {
-        label: 'Out of Focus',
+        label: 'Uncertain Readability',
         severity: 'error',
         icon: 'blur_off',
-        desc: 'Insufficient high-frequency detail detected. Image appears fuzzy.',
+        desc: 'Significant loss of high-frequency detail. Character legibility likely low.',
         color: 'text-error'
       };
     }
     return {
-      label: 'Poor Focus',
+      label: 'Reduced Sharpness',
       severity: 'warning',
       icon: 'blur_on',
-      desc: 'Partial blur detected. Subject clarity is below optimal thresholds.',
+      desc: 'Acceptable for manual review, but lacks professional focus clarity.',
       color: 'text-warning'
     };
   }
 
-  if (confidence > 0.8) {
+  // PRIORITY 3: Operational Success States
+  if (confidence >= 0.9 && labels?.motionRisk === 'Low' && labels?.edgeEnergy === 'High') {
     return {
-      label: 'Excellent Sharpness',
+      label: 'Verification Ready',
       severity: 'success',
       icon: 'verified',
-      desc: 'Crystal clear focus with consistent edge distribution.',
+      desc: 'Optimal clarity with zero motion artifacts and high edge definition.',
       color: 'text-secondary'
     };
   }
 
+  if (confidence >= 0.75) {
+    return {
+      label: 'Acceptable Clarity',
+      severity: 'success',
+      icon: 'check_circle',
+      desc: 'Sufficient detail density for automated and manual verification.',
+      color: 'text-secondary'
+    };
+  }
+
+  if (confidence >= 0.5) {
+    return {
+      label: 'Manual Review Recommended',
+      severity: 'info',
+      icon: 'help',
+      desc: 'Slightly soft focus. Visual confirmation of plate identity suggested.',
+      color: 'text-outline'
+    };
+  }
+
   return {
-    label: 'Good Focus',
-    severity: 'success',
-    icon: 'check_circle',
-    desc: 'Focus quality is within acceptable parameters for analysis.',
-    color: 'text-secondary'
+    label: 'Limited Detail',
+    severity: 'info',
+    icon: 'info',
+    desc: 'Image lacks sufficient structure for automated processing.',
+    color: 'text-outline'
   };
 };
 
-/** Get user-facing status and description for Brightness Analysis */
+/** Get operational status and description for Exposure */
 export const getBrightnessInterpretation = (result?: BrightnessResult): AnalysisState => {
   if (!result || !result.details) {
     return {
-      label: 'Analysis Pending',
+      label: 'Analyzing Lighting...',
       severity: 'pending',
       icon: 'hourglass_empty',
-      desc: 'Luminance and contrast evaluation is currently in progress.',
+      desc: 'Luminance and contrast evaluation in progress.',
       color: 'text-outline'
     };
   }
@@ -117,49 +146,49 @@ export const getBrightnessInterpretation = (result?: BrightnessResult): Analysis
 
   if (details.failures?.includes('shadow_clipping')) {
     return {
-      label: 'Shadow Clipping',
+      label: 'Crushed Shadows',
       severity: 'error',
       icon: 'brightness_4',
-      desc: 'Severe detail loss in dark regions (crushed blacks).',
+      desc: 'Severe detail loss in dark regions. May hide vehicle features.',
       color: 'text-error'
     };
   }
 
   if (details.failures?.includes('highlight_clipping')) {
     return {
-      label: 'Highlight Clipping',
+      label: 'Blown Highlights',
       severity: 'error',
       icon: 'brightness_7',
-      desc: 'Severe detail loss in bright regions (blown highlights).',
+      desc: 'Severe glare or overexposure. May obscure characters.',
       color: 'text-error'
     };
   }
 
   if (details.failures?.includes('low_contrast')) {
     return {
-      label: 'Low Contrast',
+      label: 'Limited Contrast',
       severity: 'warning',
       icon: 'tonality',
-      desc: 'Image lacks tonal separation. May be caused by fog, haze, or poor lighting.',
+      desc: 'Lacks tonal separation. Character differentiation may be difficult.',
       color: 'text-warning'
     };
   }
 
   if (!passed) {
     return {
-      label: details.verdict === 'too_dark' ? 'Underexposed' : 'Overexposed',
+      label: details.verdict === 'too_dark' ? 'Suboptimal Lighting' : 'Strong Exposure',
       severity: 'error',
       icon: details.verdict === 'too_dark' ? 'dark_mode' : 'light_mode',
-      desc: 'Exposure levels are outside usable range for reliable processing.',
+      desc: 'Illumination levels are outside optimal verification range.',
       color: 'text-error'
     };
   }
 
   return {
-    label: 'Optimal Exposure',
+    label: 'Balanced Exposure',
     severity: 'success',
     icon: 'brightness_medium',
-    desc: 'Balanced luminance and contrast detected across the scene.',
+    desc: 'Optimal luminance and contrast for automated extraction.',
     color: 'text-secondary'
   };
 };

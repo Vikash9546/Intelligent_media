@@ -402,37 +402,70 @@ docker-compose up --scale worker=3
 
 ## Project Structure
 
+This monorepo is cleanly separated into two primary independent directories for the verification service backend and visual frontend:
+
+### 🖥️ 1. Verification Service Backend (`backend/`)
+
 ```
-src/
-├── server.ts              ← API entry point (starts Express, runs migrations)
-├── worker.ts              ← Worker entry point (starts BullMQ worker)
-├── api/
-│   ├── app.ts             ← Express app factory
-│   ├── upload.ts          ← POST /api/v1/upload handler
-│   ├── jobs.ts            ← Status, results, failure, list handlers
-│   └── errorHandler.ts    ← Global error middleware
-├── queue/
-│   ├── producer.ts        ← BullMQ queue + enqueue function
-│   └── consumer.ts        ← BullMQ worker + job processor
-├── analysis/
-│   ├── types.ts           ← CheckResult interface
-│   ├── index.ts           ← Orchestrator (runs all 6 checks concurrently)
-│   ├── blurDetection.ts   ← Laplacian variance
-│   ├── brightnessAnalysis.ts  ← Mean luminance
-│   ├── duplicateDetection.ts  ← dHash + Hamming distance
-│   ├── screenshotDetection.ts ← EXIF + aspect ratio + Sobel edges
-│   ├── ocrPlateDetection.ts   ← Tesseract + Indian plate regex
-│   └── dimensionValidation.ts ← Metadata read, dimension/ratio checks
-├── db/
-│   ├── pool.ts            ← PostgreSQL connection pool singleton
-│   ├── migrate.ts         ← Sequential migration runner
-│   └── models.ts          ← Typed query functions
-├── storage/
-│   └── provider.ts        ← StorageProvider interface + LocalStorageProvider
-└── utils/
-    ├── logger.ts          ← Pino structured logger
-    ├── errors.ts          ← AppError hierarchy (fatal vs transient)
-    └── constants.ts       ← All thresholds + weights (documented)
+backend/
+├── src/
+│   ├── server.ts              ← API entry point (starts Express, runs migrations)
+│   ├── worker.ts              ← Worker entry point (starts BullMQ worker)
+│   ├── api/
+│   │   ├── app.ts             ← Express app factory
+│   │   ├── upload.ts          ← POST /api/v1/upload handler
+│   │   ├── jobs.ts            ← Status, results, failure, list handlers
+│   │   └── errorHandler.ts    ← Global error middleware
+│   ├── queue/
+│   │   ├── producer.ts        ← BullMQ queue + enqueue function
+│   │   └── consumer.ts        ← BullMQ worker + job processor
+│   ├── analysis/
+│   │   ├── types.ts           ← CheckResult interface
+│   │   ├── index.ts           ← Orchestrator (runs all checks concurrently)
+│   │   ├── blurDetection.ts   ← Laplacian variance focus checker
+│   │   ├── brightnessAnalysis.ts  ← Mean luminance and over/under exposure limits
+│   │   ├── duplicateDetection.ts  ← dHash + Hamming distance matching
+│   │   ├── screenshotDetection.ts ← EXIF + aspect ratio + Sobel edges heuristics
+│   │   ├── ocrPlateDetection.ts   ← 5-pass aspect-filtered localized OCR engine
+│   │   ├── tamperingDetection.ts  ← Image manipulation and compression variance signatures
+│   │   ├── trustEngine.ts     ← 5-dimensional trust calibration scoring framework
+│   │   └── dimensionValidation.ts ← Metadata read, dimension/ratio validations
+│   ├── db/
+│   │   ├── pool.ts            ← PostgreSQL connection pool singleton
+│   │   ├── migrate.ts         ← Sequential migration runner
+│   │   └── models.ts          ← Typed query model layer
+│   ├── storage/
+│   │   └── provider.ts        ← StorageProvider interface + LocalStorageProvider
+│   └── utils/
+│       ├── logger.ts          ← Pino structured logger
+│       ├── errors.ts          ← AppError hierarchy (fatal vs transient)
+│       └── constants.ts       ← All thresholds + weights (documented)
+├── tsconfig.json              ← Backend TypeScript configuration
+├── package.json               ← Dependencies & scripts
+└── Dockerfile                 ← API & Worker multi-stage builder
+```
+
+### 🎨 2. Visual Operational Frontend (`frontend/`)
+
+```
+frontend/
+├── src/
+│   ├── main.tsx               ← Vite Client entry point
+│   ├── App.tsx                ← UI page routing & providers
+│   ├── index.css              ← Color Tokens, Material design utilities
+│   ├── components/            ← Shared custom UI building blocks
+│   ├── pages/                 ← Functional application pages
+│   │   ├── Upload.tsx         ← Dynamic drag-drop visual upload portal
+│   │   ├── Jobs.tsx           ← Historical list of verification audits
+│   │   └── JobResults.tsx     ← Multi-dimensional trust calibration dashboard
+│   └── utils/                 ← Client side utility helpers
+│       ├── analysisAdapter.ts ← Dynamic model parsing and DTO formatting
+│       ├── analysisHelpers.ts ← Interpretation wordings & score maps
+│       └── renderHelpers.tsx  ← Icon mappings & Tailwind/Material styles
+├── index.html                 ← Application index layout
+├── vite.config.ts             ← Vite dev server & bundling rules
+├── tailwind.config.js         ← Custom Tailwind / CSS definitions
+└── Dockerfile                 ← Production Nginx build pipeline
 ```
 
 ---

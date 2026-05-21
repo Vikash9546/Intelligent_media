@@ -15,14 +15,30 @@ import logger from '../utils/logger';
  * a factory function rather than a single shared connection.
  */
 export function createRedisConnection(): IORedis {
-  const connection = new IORedis({
-    host: process.env.REDIS_HOST ?? 'localhost',
-    port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
+  const redisUrl = process.env.REDIS_URL;
+  const options: any = {
     maxRetriesPerRequest: null, // Required by BullMQ — it manages retries internally
     enableReadyCheck: false,    // Avoids blocking on Redis startup
     lazyConnect: true,
-  });
+  };
+
+  let connection: IORedis;
+
+  if (redisUrl) {
+    if (redisUrl.startsWith('rediss://')) {
+      options.tls = {
+        rejectUnauthorized: false,
+      };
+    }
+    connection = new IORedis(redisUrl, options);
+  } else {
+    connection = new IORedis({
+      host: process.env.REDIS_HOST ?? 'localhost',
+      port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+      password: process.env.REDIS_PASSWORD || undefined,
+      ...options,
+    });
+  }
 
   connection.on('error', (err) => {
     logger.error({ err }, 'Redis connection error');

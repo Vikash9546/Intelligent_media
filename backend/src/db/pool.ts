@@ -15,11 +15,12 @@ import logger from '../utils/logger';
  */
 
 const poolConfig: PoolConfig = {
-  host: process.env.DB_HOST ?? 'localhost',
-  port: parseInt(process.env.DB_PORT ?? '5432', 10),
-  database: process.env.DB_NAME ?? 'media_pipeline',
-  user: process.env.DB_USER ?? 'postgres',
-  password: process.env.DB_PASSWORD ?? 'password',
+  connectionString: process.env.DATABASE_URL,
+  host: process.env.DATABASE_URL ? undefined : (process.env.DB_HOST ?? 'localhost'),
+  port: process.env.DATABASE_URL ? undefined : parseInt(process.env.DB_PORT ?? '5432', 10),
+  database: process.env.DATABASE_URL ? undefined : (process.env.DB_NAME ?? 'media_pipeline'),
+  user: process.env.DATABASE_URL ? undefined : (process.env.DB_USER ?? 'postgres'),
+  password: process.env.DATABASE_URL ? undefined : (process.env.DB_PASSWORD ?? 'password'),
   min: parseInt(process.env.DB_POOL_MIN ?? '2', 10),
   max: parseInt(process.env.DB_POOL_MAX ?? '10', 10),
   // Close idle connections after 30 s to avoid holding sockets unnecessarily
@@ -28,6 +29,10 @@ const poolConfig: PoolConfig = {
   connectionTimeoutMillis: 5_000,
   // Let Postgres reject stale connections; we will reconnect automatically
   allowExitOnIdle: false,
+  // Enable SSL/TLS for cloud databases while ignoring localhost
+  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
+    ? { rejectUnauthorized: false }
+    : undefined,
 };
 
 const pool = new Pool(poolConfig);

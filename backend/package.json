@@ -9,6 +9,7 @@
     "dev:worker": "ts-node-dev --respawn --transpile-only src/worker.ts",
     "start": "node dist/server.js",
     "start:worker": "node dist/worker.js",
+    "start:prod": "node dist/server.js & node dist/worker.js",
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:prod": "node dist/db/migrate.js",
     "lint": "eslint 'src/**/*.ts'",
